@@ -1,15 +1,28 @@
 //#ef GLOBAL VARIABLES
+// screen.orientation.lock('landscape');
 
-
-//##ef World Canvas Variables
-let worldPanel;
+//##ef World Panel Variables
+let worldPanel, worldSvg;
 const DEVICE_SCREEN_W = window.screen.width;
-const MAX_W = 500;
-const CANVAS_W = Math.min(DEVICE_SCREEN_W, MAX_W);
-const CANVAS_H = 500;
-const CANVAS_CENTER = CANVAS_W / 2;
-const CANVAS_MARGIN = 4;
-//##endef END World Canvas Variables
+const DEVICE_SCREEN_H = window.screen.height;
+const MAX_W = 633;
+const MAX_H = 240;
+const WORLD_W = Math.min(DEVICE_SCREEN_W, MAX_W);
+const WORLD_H = Math.min(DEVICE_SCREEN_H, MAX_H);
+const WORLD_CENTER = WORLD_W / 2;
+const WORLD_THIRD = WORLD_W / 3;
+const WORLD_QTR = WORLD_W / 4;
+const WORLD_MARGIN = 4;
+//##endef World Panel Variables
+
+//##ef Canvas Variables
+let canvas;
+//##endef Canvas Variables
+
+//##ef Cursor Variables
+let cursorLine, cursorRect;
+const CURSOR_RECT_W = 40;
+//##endef Cursor Variables
 
 
 //#endef GLOBAL VARIABLES
@@ -17,9 +30,9 @@ const CANVAS_MARGIN = 4;
 //#ef INIT
 function init() {
 
-
   makeWorldPanel();
-
+  makeCanvas();
+  makeCursor();
 
 } // function init() END
 //#endef INIT
@@ -29,18 +42,65 @@ function init() {
 
 //##ef Make World Panel
 function makeWorldPanel() {
+
   worldPanel = mkPanel({
-    w: CANVAS_W,
-    h: CANVAS_H,
+    w: WORLD_W,
+    h: WORLD_H,
     title: 'SoundFlow #5',
     onwindowresize: true,
-    clr: clr_blueGrey
+    clr: 'none'
   });
+
   worldPanel.content.addEventListener('click', function() {
-    document.documentElement.webkitRequestFullScreen({ navigationUI: 'hide' });
+    document.documentElement.webkitRequestFullScreen({
+      navigationUI: 'hide'
+    });
   });
+
 } // function makeWorldPanel() END
 //##endef Make World Panel
+
+//##ef Make Canvas
+function makeCanvas() {
+  canvas = mkSVGcontainer({
+    canvas: worldPanel.content,
+    w: WORLD_W,
+    h: WORLD_H,
+    x: 0,
+    y: 0,
+    clr: 'black'
+  });
+} // function makeCanvas() END
+//##endef Make Canvas
+
+//##ef Make Cursor
+function makeCursor() {
+
+  cursorRect = mkSvgRect({
+    svgContainer: canvas,
+    x: WORLD_THIRD,
+    y: 1,
+    w: CURSOR_RECT_W,
+    h: WORLD_H - 2,
+    fill: 'none',
+    stroke: 'white',
+    strokeW: 2,
+    roundR: 0
+  });
+
+  cursorLine = mkSvgLine({
+    svgContainer: canvas,
+    x1: WORLD_THIRD,
+    y1: 0,
+    x2: WORLD_THIRD,
+    y2: WORLD_W,
+    stroke: 'yellow',
+    strokeW: 4
+  });
+
+
+} // function makeCursor() END
+//##endef Make Cursor
 
 
 //#endef BUILD WORLD
@@ -86,19 +146,19 @@ let displayClock;
 
 //##ef World Canvas Variables
 let worldPanel;
-const CANVAS_MARGIN = 4;
-// let CANVAS_W = 590;
-// let CANVAS_H = 515;
-let CANVAS_W = 441;
-let CANVAS_H = 474;
-let CANVAS_CENTER = CANVAS_W / 2;
+const WORLD_MARGIN = 4;
+// let WORLD_W = 590;
+// let WORLD_H = 515;
+let WORLD_W = 441;
+let WORLD_H = 474;
+let WORLD_CENTER = WORLD_W / 2;
 //##endef END World Canvas Variables
 
 //##ef ThreeJS Scene Variables
 const RENDERER_W = 340;
 const RENDERER_H = 180;
-const RENDERER_TOP = CANVAS_MARGIN;
-const RENDERER_DIV_LEFT = CANVAS_CENTER - (RENDERER_W / 2);
+const RENDERER_TOP = WORLD_MARGIN;
+const RENDERER_DIV_LEFT = WORLD_CENTER - (RENDERER_W / 2);
 let SCENE, CAMERA, SUN, SUN2, RENDERER_DIV, RENDERER;
 let materialColors = [];
 for (let matlClrIx = 0; matlClrIx < TEMPO_COLORS.length; matlClrIx++) {
@@ -194,9 +254,9 @@ const NOTEHEAD_H = 6;
 const HALF_NOTEHEAD_H = NOTEHEAD_H / 2;
 const RHYTHMIC_NOTATION_CANVAS_W = NOTES_PADDING + (BEAT_LENGTH_PX * NUM_BEATS_PER_STAFFLINE) + NOTES_PADDING; //canvas longer to display notation but cursors will only travel duration of beat thus not to the end of the canvas
 const RHYTHMIC_NOTATION_CANVAS_H = TOP_STAFF_LINE_Y + ((NUM_STAFFLINES - 1) * VERT_DIST_BTWN_STAVES) + STAFF_BTM_MARGIN;
-const RHYTHMIC_NOTATION_CANVAS_TOP = CANVAS_MARGIN + RENDERER_H + BB_H + CANVAS_MARGIN;
+const RHYTHMIC_NOTATION_CANVAS_TOP = WORLD_MARGIN + RENDERER_H + BB_H + WORLD_MARGIN;
 const ADJ_FOR_PITCH_SETS_WIN = 26;
-const RHYTHMIC_NOTATION_CANVAS_L = CANVAS_CENTER - (RHYTHMIC_NOTATION_CANVAS_W / 2) + ADJ_FOR_PITCH_SETS_WIN;
+const RHYTHMIC_NOTATION_CANVAS_L = WORLD_CENTER - (RHYTHMIC_NOTATION_CANVAS_W / 2) + ADJ_FOR_PITCH_SETS_WIN;
 
 //###ef Beat Coordinates
 
@@ -479,7 +539,7 @@ let animationEngineCanRun = true;
 //#ef Control Panel Vars
 let scoreCtrlPanel;
 const CTRLPANEL_W = 92;
-const CTRLPANEL_H = CANVAS_H;
+const CTRLPANEL_H = WORLD_H;
 const CTRLPANEL_BTN_W = 63;
 const CTRLPANEL_BTN_H = 35;
 const CTRLPANEL_BTN_L = (CTRLPANEL_W / 2) - (CTRLPANEL_BTN_W / 2);
@@ -1837,8 +1897,8 @@ function makeScoreDataManager() {
 function makeWorldPanel() {
 
   worldPanel = mkPanel({
-    w: CANVAS_W,
-    h: CANVAS_H,
+    w: WORLD_W,
+    h: WORLD_H,
     title: 'SoundFlow #4',
     onwindowresize: true,
     clr: clr_blueGrey

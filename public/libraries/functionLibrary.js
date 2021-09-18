@@ -23,6 +23,258 @@ let clr_yellow = 'rgba(254,213,0,255)';
 let clr_neonMagenta = "rgb(255, 21, 160)";
 // #endef END Colors
 
+
+//#ef Make Panel
+
+//##ef makePanelContentDiv
+//Make a div to use in jspanel
+let makePanelContentDiv = function({
+  w = 200,
+  h = 200,
+  top = 0,
+  left = 0,
+  clr = 'black'
+} = {
+  w: 200,
+  h: 200,
+  clr: 'black',
+  top: 0,
+  left: 0
+}) {
+  let t_div = document.createElement("div");
+  t_div.style.width = w.toString() + "px";
+  t_div.style.height = h.toString() + "px";
+  t_div.style.backgroundColor = clr;
+  t_div.style.position = 'absolute';
+  t_div.style.top = top.toString() + 'px';
+  t_div.style.left = left.toString() + 'px';
+  t_div.style.borderWidth = '0px';
+  t_div.style.padding = '0px';
+  t_div.style.margin = '0px';
+  return t_div;
+}
+//##endef makePanelContentDiv
+
+let mkPanel = function({
+  canvasType = 0,
+  w = 200,
+  h = 200,
+  title = 'panel',
+  ipos = 'center-top',
+  offsetX = '0px',
+  offsetY = '0px',
+  autopos = 'none',
+  headerSize = 'xs',
+  onwindowresize = false,
+  contentOverflow = 'hidden',
+  clr = 'black',
+  onsmallified = function() {},
+  onunsmallified = function() {},
+  canresize = false,
+  header = 'auto-show-hide'
+} = {
+  canvasType: 0, // 0=div;1=svg
+  w: 200,
+  h: 200,
+  title: 'panel',
+  ipos: 'center-top',
+  offsetX: '0px',
+  offsetY: '0px',
+  autopos: 'none',
+  headerSize: 'xs',
+  onwindowresize: false,
+  contentOverflow: 'hidden',
+  clr: 'black',
+  onsmallified: function() {},
+  onunsmallified: function() {},
+  canresize: false,
+  header: 'auto-show-hide' //false
+}) {
+
+  let panelForReturn;
+  let canvas = makePanelContentDiv({
+    w: w,
+    h: h,
+    clr: clr
+  });
+
+  jsPanel.create({
+    position: {
+      my: ipos, //string from jspanel eg 'center-top'
+      at: ipos,
+      offsetX: offsetX,
+      offsetY: offsetY,
+      autoposition: autopos
+    },
+    contentSize: w.toString() + " " + h.toString(),
+    header: header,
+    headerControls: {
+      size: headerSize,
+      minimize: 'remove',
+      maximize: 'remove',
+      close: 'remove'
+    },
+    contentOverflow: contentOverflow,
+    headerTitle: title,
+    theme: "light",
+    content: canvas, //svg canvas lives here
+    resizeit: {
+      aspectRatio: 'content',
+      resize: function(panel, paneldata, e) {}
+    },
+    onwindowresize: onwindowresize,
+    onsmallified: onsmallified,
+    onunsmallified: onunsmallified,
+    resizeit: {
+      disable: !canresize
+    },
+    callback: function() {
+      panelForReturn = this;
+    }
+  });
+  return panelForReturn;
+} //jsPanel.create
+
+//#endef mkPanel
+
+// #ef mkSVGcontainer
+// mkSVGcontainer( {canvas,w: 200,h: 200,x: 50,y: 50, clr: 'black'});
+let mkSVGcontainer = function({
+  canvas,
+  w = 200,
+  h = 200,
+  x = 50,
+  y = 50,
+  clr = 'black'
+} = {
+  canvas,
+  w: 200,
+  h: 200,
+  x: 50,
+  y: 50,
+  clr: 'black'
+}) {
+  let tSvgCont = document.createElementNS(SVG_NS, "svg");
+  tSvgCont.setAttributeNS(null, "width", w);
+  tSvgCont.setAttributeNS(null, "height", h);
+  tSvgCont.setAttributeNS(null, "x", x);
+  tSvgCont.setAttributeNS(null, "y", y);
+  tSvgCont.style.backgroundColor = clr;
+  canvas.appendChild(tSvgCont);
+  return tSvgCont;
+}
+// #endef END mkSVGcontainer
+
+// #ef mkSvgRect
+// mkSvgRect({ svgContainer, x: 25, y: 25, w: 10, h: 10, fill: 'green', stroke: 'yellow', strokeW: 0, roundR: 0 });
+let mkSvgRect = function({
+  svgContainer,
+  x = 25,
+  y = 25,
+  w = 10,
+  h = 10,
+  fill = 'green',
+  stroke = 'yellow',
+  strokeW = 0,
+  roundR = 0
+} = {
+  svgContainer,
+  x: 25,
+  y: 25,
+  w: 10,
+  h: 10,
+  fill: 'green',
+  stroke: 'yellow',
+  strokeW: 0,
+  roundR: 0
+}) {
+
+  let svgRect = document.createElementNS(SVG_NS, "rect");
+  svgRect.setAttributeNS(null, "x", x);
+  svgRect.setAttributeNS(null, "y", y);
+  svgRect.setAttributeNS(null, "width", w);
+  svgRect.setAttributeNS(null, "height", h);
+  svgRect.setAttributeNS(null, "fill", fill);
+  svgRect.setAttributeNS(null, "stroke", stroke);
+  svgRect.setAttributeNS(null, "stroke-width", strokeW);
+  svgRect.setAttributeNS(null, "rx", roundR);
+  svgContainer.appendChild(svgRect);
+  return svgRect;
+}
+
+// #endef END mkSvgRect
+
+// #ef mkDiv
+//  mkDiv({canvas, w: 50, h: 20, top: 0, left: 0 ,bgClr: clr_limeGreen});
+let mkDiv = function({
+  canvas,
+  w = 50,
+  h = 20,
+  top = 0,
+  left = 0,
+  bgClr = clr_limeGreen
+} = {
+  canvas,
+  w: 50,
+  h: 20,
+  top: 0,
+  left: 0,
+  bgClr: clr_limeGreen
+}) {
+  let tDiv = document.createElement("div");
+  tDiv.style.position = 'absolute';
+  tDiv.style.width = w.toString() + "px";
+  tDiv.style.height = h.toString() + "px";
+  tDiv.style.top = top.toString() + 'px';
+  tDiv.style.left = left.toString() + 'px';
+  tDiv.style.backgroundColor = bgClr;
+  tDiv.style.borderWidth = '0px';
+  tDiv.style.padding = '0px';
+  tDiv.style.margin = '0px';
+  canvas.appendChild(tDiv);
+  return tDiv;
+}
+// #endef END mkDiv
+
+// #ef mkSvgLine
+// mkSvgLine({ svgContainer, x1: 25, y1: 25, x2: 25, y2: 25, stroke: 'yellow', strokeW: 3 });
+let mkSvgLine = function({
+  svgContainer,
+  x1 = 25,
+  y1 = 25,
+  x2 = 25,
+  y2 = 25,
+  stroke = 'yellow',
+  strokeW = 3
+} = {
+  svgContainer,
+  x1: 25,
+  y1: 25,
+  x2: 25,
+  y2: 25,
+  stroke: 'yellow',
+  strokeW: 3
+}) {
+
+  var svgLine = document.createElementNS(SVG_NS, "line");
+  svgLine.setAttributeNS(null, "x1", x1);
+  svgLine.setAttributeNS(null, "y1", y1);
+  svgLine.setAttributeNS(null, "x2", x2);
+  svgLine.setAttributeNS(null, "y2", y2);
+  svgLine.setAttributeNS(null, "stroke", stroke);
+  svgLine.setAttributeNS(null, "stroke-width", strokeW);
+  svgContainer.appendChild(svgLine);
+
+  return svgLine;
+}
+
+// #endef END mkSvgLine
+
+
+
+
+/*
+
 //#ef Make Panel
 
 //##ef makePanelContentDiv
@@ -135,15 +387,6 @@ let mkPanel = function({
 } //jsPanel.create
 
 //#endef mkPanel
-
-
-
-
-
-
-
-
-/*
 
 // #ef mkDivCanvas
 let mkDivCanvas = function({
