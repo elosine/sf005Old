@@ -1,17 +1,31 @@
 //#ef GLOBAL VARIABLES
 
 
-
 //##ef World Canvas Variables
 let worldPanel;
+const DEVICE_SCREEN_W = window.screen.width;
+const MAX_W = 500;
+const CANVAS_W = Math.min(DEVICE_SCREEN_W, MAX_W);
+const CANVAS_H = 500;
+const CANVAS_CENTER = CANVAS_W / 2;
 const CANVAS_MARGIN = 4;
-let CANVAS_W = 441;
-let CANVAS_H = 474;
-let CANVAS_CENTER = CANVAS_W / 2;
 //##endef END World Canvas Variables
 
 
 //#endef GLOBAL VARIABLES
+
+//#ef INIT
+function init() {
+
+
+  makeWorldPanel();
+
+
+} // function init() END
+//#endef INIT
+
+//#ef BUILD WORLD
+
 
 //##ef Make World Panel
 function makeWorldPanel() {
@@ -22,15 +36,19 @@ function makeWorldPanel() {
     onwindowresize: true,
     clr: clr_blueGrey
   });
+  worldPanel.content.addEventListener('click', function() {
+    document.documentElement.webkitRequestFullScreen({ navigationUI: 'hide' });
+  });
 } // function makeWorldPanel() END
 //##endef Make World Panel
+
+
+//#endef BUILD WORLD
 
 
 
 
 /*
-
-
 //#ef GLOBAL VARIABLES
 
 
@@ -3748,9 +3766,6 @@ function calcDisplayClock(pieceTimeMS) {
   displayClock.content.innerHTML = pad(displayClock_TimeHrs, 2) + ":" + pad(displayClock_TimeMin, 2) + ":" + pad(displayClock_TimeSec, 2);
 }
 //#endef CLOCK
-
-
-
 */
 
 

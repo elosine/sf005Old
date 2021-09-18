@@ -23,6 +23,128 @@ let clr_yellow = 'rgba(254,213,0,255)';
 let clr_neonMagenta = "rgb(255, 21, 160)";
 // #endef END Colors
 
+//#ef Make Panel
+
+//##ef makePanelContentDiv
+//Make a div to use in jspanel
+let makePanelContentDiv = function({
+  w = 200,
+  h = 200,
+  top = 0,
+  left = 0,
+  clr = 'black'
+} = {
+  w: 200,
+  h: 200,
+  clr: 'black',
+  top: 0,
+  left: 0
+}) {
+  let t_div = document.createElement("div");
+  t_div.style.width = w.toString() + "px";
+  t_div.style.height = h.toString() + "px";
+  t_div.style.backgroundColor = clr;
+  t_div.style.position = 'absolute';
+  t_div.style.top = top.toString() + 'px';
+  t_div.style.left = left.toString() + 'px';
+  t_div.style.borderWidth = '0px';
+  t_div.style.padding = '0px';
+  t_div.style.margin = '0px';
+  return t_div;
+}
+//##endef makePanelContentDiv
+
+let mkPanel = function({
+  canvasType = 0,
+  w = 200,
+  h = 200,
+  title = 'panel',
+  ipos = 'center-top',
+  offsetX = '0px',
+  offsetY = '0px',
+  autopos = 'none',
+  headerSize = 'xs',
+  onwindowresize = false,
+  contentOverflow = 'hidden',
+  clr = 'black',
+  onsmallified = function() {},
+  onunsmallified = function() {},
+  canresize = false,
+  header = 'auto-show-hide'
+} = {
+  canvasType: 0, // 0=div;1=svg
+  w: 200,
+  h: 200,
+  title: 'panel',
+  ipos: 'center-top',
+  offsetX: '0px',
+  offsetY: '0px',
+  autopos: 'none',
+  headerSize: 'xs',
+  onwindowresize: false,
+  contentOverflow: 'hidden',
+  clr: 'black',
+  onsmallified: function() {},
+  onunsmallified: function() {},
+  canresize: false,
+  header: 'auto-show-hide'
+}) {
+
+  let panelForReturn;
+  let canvas = makePanelContentDiv({
+    w: w,
+    h: h,
+    clr: clr
+  });
+
+  jsPanel.create({
+    position: {
+      my: ipos, //string from jspanel eg 'center-top'
+      at: ipos,
+      offsetX: offsetX,
+      offsetY: offsetY,
+      autoposition: autopos
+    },
+    contentSize: w.toString() + " " + h.toString(),
+    header: header,
+    headerControls: {
+      size: headerSize,
+      minimize: 'remove',
+      maximize: 'remove',
+      close: 'remove'
+    },
+    contentOverflow: contentOverflow,
+    headerTitle: title,
+    theme: "light",
+    content: canvas, //svg canvas lives here
+    resizeit: {
+      aspectRatio: 'content',
+      resize: function(panel, paneldata, e) {}
+    },
+    onwindowresize: onwindowresize,
+    onsmallified: onsmallified,
+    onunsmallified: onunsmallified,
+    resizeit: {
+      disable: !canresize
+    },
+    callback: function() {
+      panelForReturn = this;
+    }
+  });
+  return panelForReturn;
+} //jsPanel.create
+
+//#endef mkPanel
+
+
+
+
+
+
+
+
+/*
+
 // #ef mkDivCanvas
 let mkDivCanvas = function({
   w = 200,
@@ -602,29 +724,29 @@ let downloadStrToHD = function(strData, strFileName, strMimeType) {
     let bb = new MSBlobBuilder();
     bb.append(strData);
     return navigator.msSaveBlob(bb, strFileName);
-  } /* end if(window.MSBlobBuilder) */
+  } //end if(window.MSBlobBuilder)
 
-  if ('download' in a) { //FF20, CH19
-    a.setAttribute("download", n);
-    a.innerHTML = "downloading...";
-    D.body.appendChild(a);
-    setTimeout(function() {
-      let e = D.createEvent("MouseEvents");
-      e.initMouseEvent("click", true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
-      a.dispatchEvent(e);
-      D.body.removeChild(a);
-    }, 66);
-    return true;
-  }; /* end if('download' in a) */
-
-  //do iframe dataURL download: (older W3)
-  let f = D.createElement("iframe");
-  D.body.appendChild(f);
-  f.src = "data:" + (A[2] ? A[2] : "application/octet-stream") + (window.btoa ? ";base64" : "") + "," + (window.btoa ? window.btoa : escape)(strData);
+if ('download' in a) { //FF20, CH19
+  a.setAttribute("download", n);
+  a.innerHTML = "downloading...";
+  D.body.appendChild(a);
   setTimeout(function() {
-    D.body.removeChild(f);
-  }, 333);
+    let e = D.createEvent("MouseEvents");
+    e.initMouseEvent("click", true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+    a.dispatchEvent(e);
+    D.body.removeChild(a);
+  }, 66);
   return true;
+}; // end if('download' in a)
+
+//do iframe dataURL download: (older W3)
+let f = D.createElement("iframe");
+D.body.appendChild(f);
+f.src = "data:" + (A[2] ? A[2] : "application/octet-stream") + (window.btoa ? ";base64" : "") + "," + (window.btoa ? window.btoa : escape)(strData);
+setTimeout(function() {
+  D.body.removeChild(f);
+}, 333);
+return true;
 }
 // #endef END downloadStrToHD
 
@@ -1111,13 +1233,12 @@ function plot(fn, range, width, height) {
 }
 
 // USAGE
-/*
-plot( function(x){return y of x}, [xmin, xmax, ymin, ymax], crvWidth, crvHeight )
+// plot( function(x){return y of x}, [xmin, xmax, ymin, ymax], crvWidth, crvHeight )
+//
+// var coords = plot( function(x) {
+//   return Math.pow(x, 2.4);
+// }, [0, 1, 0, 1], CRV_W, CRV_H);
 
-var coords = plot( function(x) {
-  return Math.pow(x, 2.4);
-}, [0, 1, 0, 1], CRV_W, CRV_H);
-*/
 
 // #endef END plot
 
@@ -1546,7 +1667,7 @@ let pad = function(num, size) {
 //#endef pad
 
 
-
+*/
 
 
 
