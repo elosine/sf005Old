@@ -1,5 +1,14 @@
 //#ef GLOBAL VARIABLES
-// screen.orientation.lock('landscape');
+
+//#ef Audio
+const MAX_NUM_CONCURRENT_GRAINS = 20;
+let AUDIO_CONTEXT;
+let sampleBuf;
+let gainNodes = [];
+let grainBufs = [];
+let grainEnvBufs;
+let audioHasStarted = false;
+//#endef Audio
 
 //##ef World Panel Variables
 let worldPanel, worldSvg;
@@ -24,6 +33,24 @@ let cursorLine, cursorRect;
 const CURSOR_RECT_W = 40;
 //##endef Cursor Variables
 
+//#ef Control Panel Vars
+let scoreCtrlPanel;
+const CTRLPANEL_W = 92;
+const CTRLPANEL_H = WORLD_H;
+const CTRLPANEL_BTN_W = 63;
+const CTRLPANEL_BTN_H = 35;
+const CTRLPANEL_BTN_L = (CTRLPANEL_W / 2) - (CTRLPANEL_BTN_W / 2);
+const CTRLPANEL_MARGIN = 7;
+let piece_canStart = true;
+let startBtn_isActive = true;
+let stopBtn_isActive = false;
+let pauseBtn_isActive = false;
+let gotoBtn_isActive = false;
+let joinBtn_isActive = true;
+let joinGoBtn_isActive = false;
+let restartBtn_isActive = true;
+let makeRestartButton;
+//#endef END Control Panel Vars
 
 //#endef GLOBAL VARIABLES
 
@@ -33,6 +60,7 @@ function init() {
   makeWorldPanel();
   makeCanvas();
   makeCursor();
+  makeControlPanel();
 
 } // function init() END
 //#endef INIT
@@ -105,6 +133,120 @@ function makeCursor() {
 
 //#endef BUILD WORLD
 
+//#ef WEB AUDIO
+//init audio button
+//load sample into samp buf
+//build granulator
+//playback with drum rhythms
+function initAudio() {
+  // Audio Context
+  if (!audioHasStarted) {
+    AUDIO_CONTEXT = new(window.AudioContext || window.webkitAudioContext)();
+    for (let nodeIx = 0; nodeIx < MAX_NUM_CONCURRENT_GRAINS; nodeIx++) {
+      // Gain Nodes
+      let tGain = AUDIO_CONTEXT.createGain();
+      tGain.gain.setValueAtTime(0, AUDIO_CONTEXT.currentTime);
+      tGain.connect(AUDIO_CONTEXT.destination);
+      tGain.gain.linearRampToValueAtTime(0.0, AUDIO_CONTEXT.currentTime + 0.1);
+      gainNodes.push(tGain);
+
+      // Create a buffer for the incoming sound content
+      var sampleBuf = AUDIO_CONTEXT.createBufferSource();
+      // Create the XHR which will grab the audio contents
+      var sRequest = new XMLHttpRequest();
+      // Set the audio file src here
+      sRequest.open('GET', '/audio/sax.aif', true);
+      // Setting the responseType to arraybuffer sets up the audio decoding
+      sRequest.responseType = 'arraybuffer';
+      sRequest.onload = function() {
+        // Decode the audio once the require is complete
+        AUDIO_CONTEXT.decodeAudioData(sRequest.response, function(buffer) {
+          sampleBuf.buffer = buffer;
+          // Connect the audio to source (multiple audio buffers can be connected!)
+          sampleBuf.connect(AUDIO_CONTEXT.destination);
+          // Simple setting for the buffer
+          sampleBuf.loop = false;
+          sampleBuf.playbackRate.value = 1;
+          sampleBuf.start(1);
+
+        }, function(e) {
+          console.log('Audio error! ', e);
+        });
+      }
+      // Send the request which kicks off
+      sRequest.send();
+
+      // Sine Wave Oscillator
+      // tone = actx.createOscillator();
+      // tone.frequency.value = 440;
+      // tone.type = 'sine';
+      // tone.start();
+      // tone.connect(tonegain);
+    } // for (let nodeIx = 0; nodeIx < MAX_NUM_CONCURRENT_GRAINS; nodeIx++)
+    audioHasStarted = true;
+  } //  if(!audioHasStarted
+}
+// //FUNCTION playTone ------------------------------------------------------ //
+// function playTone(freq) {
+//   tone.frequency.value = freq;
+//   tonegain.gain.setValueAtTime(0, actx.currentTime + 0.05);
+//   tonegain.gain.linearRampToValueAtTime(0.15, actx.currentTime + 0.15);
+//   tonegain.gain.setValueAtTime(0.15, actx.currentTime + 0.2);
+//   tonegain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.55);
+// }
+//#endef WEB AUDIO
+
+//#ef CONTROL PANEL
+
+
+//##ef Make Control Panel
+function makeControlPanel() {
+
+  let controlPanelObj = {};
+  let cpDistBtwnButts = CTRLPANEL_BTN_H + CTRLPANEL_MARGIN + 18;
+
+  //###ef Control Panel Panel
+  let controlPanelPanel = mkPanel({
+    w: CTRLPANEL_W,
+    h: CTRLPANEL_H,
+    title: 'sf005 Control Panel',
+    ipos: 'left-top',
+    offsetX: '0px',
+    offsetY: '0px',
+    autopos: 'none',
+    headerSize: 'xs',
+    onwindowresize: true,
+    contentOverflow: 'hidden',
+    clr: 'black'
+  });
+  controlPanelObj['panel'] = controlPanelPanel;
+  //###endef Control Panel Panel
+
+  //###ef Start Piece Button
+  let startAudioButton = mkButton({
+    canvas: controlPanelPanel.content,
+    w: CTRLPANEL_BTN_W,
+    h: CTRLPANEL_BTN_H,
+    top: CTRLPANEL_MARGIN,
+    left: CTRLPANEL_MARGIN,
+    label: 'Start Audio',
+    fontSize: 14,
+    action: function() {
+      initAudio();
+    }
+  });
+  controlPanelObj['startAudioBtn'] = startAudioButton;
+  //###endef Start Piece Button
+
+
+} // function makeControlPanel() END
+//##endef Make Control Panel
+
+
+
+
+
+//#endef CONTROL PANEL
 
 
 

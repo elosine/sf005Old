@@ -270,6 +270,40 @@ let mkSvgLine = function({
 
 // #endef END mkSvgLine
 
+// #ef mkButton
+function mkButton({
+  canvas,
+  w = 50,
+  h = 50,
+  top = 15,
+  left = 15,
+  label = 'Press Me Hard',
+  fontSize = 13,
+  action = {}
+} = {
+  canvas,
+  w: 50,
+  h: 50,
+  top: 15,
+  left: 15,
+  label: 'Press Me Hard',
+  fontSize: 13,
+  action: {}
+}) {
+  let btn = document.createElement("BUTTON");
+  btn.className = 'btn btn-1';
+  btn.innerText = label;
+  btn.style.width = w.toString() + "px";
+  btn.style.height = h.toString() + "px";
+  btn.style.top = top.toString() + "px";
+  btn.style.left = left.toString() + "px";
+  btn.style.fontSize = fontSize.toString() + "px";
+  btn.addEventListener("click", action);
+  canvas.appendChild(btn);
+  return btn;
+}
+// #endefEND mkButton
+
 
 
 
