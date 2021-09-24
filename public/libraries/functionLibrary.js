@@ -328,7 +328,28 @@ function rrand(min, max) {
 }
 // #endef END rrand
 
+// #ef rrandInt
+let rrandInt = function(min, max) {
+  return Math.round(Math.random() * (max - min) + min);
+}
+// #endef END rrandInt
 
+
+
+// #ef choose
+
+let choose = function(choicesArr) {
+  let t_theThingToReturn;
+  if (choicesArr.length != 0) {
+    let randpick = rrandInt(0, choicesArr.length - 1);
+    t_theThingToReturn = choicesArr[randpick];
+  }
+
+  return t_theThingToReturn;
+
+}
+
+// #endef END choose
 
 
 /*

@@ -1,11 +1,6 @@
 //#ef GLOBAL VARIABLES
 
-//#ef Audio
-let audioCtx, DAC;
-let samplePaths = ["/audio/sax.wav"];
-let samples_asBuffers = [];
-let audioHasStarted = false;
-//#endef Audio
+
 
 //##ef World Panel Variables
 let worldPanel, worldSvg;
@@ -132,6 +127,13 @@ function makeCursor() {
 
 //#ef WEB AUDIO
 
+//#ef Audio
+let audioCtx, DAC;
+let samplePaths = ["/audio/sax.wav"];
+let samples_asBuffers = [];
+let audioHasStarted = false;
+//#endef Audio
+
 function initAudio() {
 
   if (!audioHasStarted) {
@@ -154,6 +156,7 @@ function initAudio() {
   } //  if(!audioHasStarted
 }
 
+
 const playGrain = (grainStartTime_MS, grainDur_MS, bufNum, grEnvName) => {
 
   let grainStartTime_SEC = grainStartTime_MS / 1000;
@@ -166,26 +169,41 @@ const playGrain = (grainStartTime_MS, grainDur_MS, bufNum, grEnvName) => {
   grain.buffer = t_sampBuf;
 
   // Create a node to control the buffer's gain.
-  const grainGain = audioCtx.createGain()
-  grainGain.connect(DAC);
-
+  const grainGain = audioCtx.createGain();
+  const panNode = audioCtx.createStereoPanner();
+  grainGain.connect(panNode);
+  panNode.connect(DAC);
+  panNode.pan.value = rrand(-1,1);
   // Create a window.
-  grainGain.gain.setValueAtTime(0, grainStartTime_SEC);
-  grainGain.gain.setValueCurveAtTime(grEnvArray, grainStartTime_SEC, grainDur_SEC);
+  grainGain.gain.setValueAtTime(0, audioCtx.currentTime + grainStartTime_SEC);
+  grainGain.gain.setValueCurveAtTime(grEnvArray, audioCtx.currentTime + grainStartTime_SEC, grainDur_SEC);
   grain.connect(grainGain);
 
   // Choose a random place to start.
-  const offset = Math.random() * (t_sampBuf.duration - grainDur_SEC)
+  const offset = Math.random() * (samples_asBuffers[0].duration - grainDur_SEC)
 
   // Play the grain.
-  grain.start(grainStartTime_SEC, offset, grainDur_SEC);
+  grain.start(audioCtx.currentTime + grainStartTime_SEC, offset, grainDur_SEC);
 };
 
-function playGrainsTest(){
-  // for (var i = 0; i < 100; i++) {
-    let tgrdur = rrand(30, 85);
-    playGrain(drumTimings_MS[12], tgrdur, 0, 'rexpodec');
-  // }
+function grainCloud001(durSec) {
+  let durMS = durSec * 1000;
+  let drumTimings_startIx = rrandInt(0, drumTimings_MS.length);
+  let tStartTime=0;
+  let tIx = 0
+  while (durMS >= tStartTime) {
+    // let tgrdur = rrand(11, 17);
+    let tgrdur = choose([14, 14, 14, 13, 15, 14, 15, 16, 15, 15, 15, 16, 16, 16, 17, 17, 17, 17, 18, 18, 19, 19, 19, 20, 20, 21, 21, 22, 23, 23, 23, 42, 39, 50, 85, 72]);
+    let dtIx = (drumTimings_startIx + tIx) % (drumTimings_MS.length - 1);
+    if (dtIx >= drumTimings_startIx) {
+      tStartTime = drumTimings_MS[dtIx] - drumTimings_MS[drumTimings_startIx];
+    } else {
+      tStartTime = drumTimings_MS[dtIx] + drumTimings_MS[drumTimings_MS.length-1]- drumTimings_MS[drumTimings_startIx];
+    }
+    let tGrEnv = choose(['expodec', 'expodec', 'expodec', 'expodec', 'gauss', 'expodec', 'expodec', 'expodec', 'expodec', 'expodec', 'expodec', 'expodec', 'expodec', 'rexpodec', 'blackmanHarris', 'pulse', 'pulse', 'tri']);
+    playGrain(tStartTime, tgrdur, 0, tGrEnv);
+    tIx++;
+  }
 }
 
 //#endef WEB AUDIO
@@ -241,7 +259,7 @@ function makeControlPanel() {
     label: 'Play Grains',
     fontSize: 14,
     action: function() {
-      playGrainsTest();
+      grainCloud001(30);
     }
   });
   controlPanelObj['playGr'] = playGr;
