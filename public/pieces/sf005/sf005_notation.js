@@ -1,12 +1,9 @@
 //#ef GLOBAL VARIABLES
 
 //#ef Audio
-const MAX_NUM_CONCURRENT_GRAINS = 20;
-let AUDIO_CONTEXT;
-let sampleBuf;
-let gainNodes = [];
-let grainBufs = [];
-let grainEnvBufs;
+let audioCtx, DAC;
+let samplePaths = ["/audio/sax.wav"];
+let samples_asBuffers = [];
 let audioHasStarted = false;
 //#endef Audio
 
@@ -134,66 +131,63 @@ function makeCursor() {
 //#endef BUILD WORLD
 
 //#ef WEB AUDIO
-//init audio button
-//load sample into samp buf
-//build granulator
-//playback with drum rhythms
+
 function initAudio() {
-  // Audio Context
+
   if (!audioHasStarted) {
-    AUDIO_CONTEXT = new(window.AudioContext || window.webkitAudioContext)();
-    for (let nodeIx = 0; nodeIx < MAX_NUM_CONCURRENT_GRAINS; nodeIx++) {
-      // Gain Nodes
-      let tGain = AUDIO_CONTEXT.createGain();
-      tGain.gain.setValueAtTime(0, AUDIO_CONTEXT.currentTime);
-      tGain.connect(AUDIO_CONTEXT.destination);
-      tGain.gain.linearRampToValueAtTime(0.0, AUDIO_CONTEXT.currentTime + 0.1);
-      gainNodes.push(tGain);
+    audioCtx = new AudioContext();
+    DAC = audioCtx.destination;
 
-      // Create a buffer for the incoming sound content
-      var sampleBuf = AUDIO_CONTEXT.createBufferSource();
-      // Create the XHR which will grab the audio contents
-      var sRequest = new XMLHttpRequest();
-      // Set the audio file src here
-      sRequest.open('GET', '/audio/sax.aif', true);
-      // Setting the responseType to arraybuffer sets up the audio decoding
-      sRequest.responseType = 'arraybuffer';
-      sRequest.onload = function() {
-        // Decode the audio once the require is complete
-        AUDIO_CONTEXT.decodeAudioData(sRequest.response, function(buffer) {
-          sampleBuf.buffer = buffer;
-          // Connect the audio to source (multiple audio buffers can be connected!)
-          sampleBuf.connect(AUDIO_CONTEXT.destination);
-          // Simple setting for the buffer
-          sampleBuf.loop = false;
-          sampleBuf.playbackRate.value = 1;
-          sampleBuf.start(1);
+    samplePaths.forEach((path) => {
 
-        }, function(e) {
-          console.log('Audio error! ', e);
-        });
-      }
-      // Send the request which kicks off
-      sRequest.send();
+      const request = new XMLHttpRequest();
+      request.open("GET", path, true);
+      request.responseType = "arraybuffer";
+      request.onload = () => audioCtx.decodeAudioData(request.response, (data) => samples_asBuffers.push(data));
+      request.send();
 
-      // Sine Wave Oscillator
-      // tone = actx.createOscillator();
-      // tone.frequency.value = 440;
-      // tone.type = 'sine';
-      // tone.start();
-      // tone.connect(tonegain);
-    } // for (let nodeIx = 0; nodeIx < MAX_NUM_CONCURRENT_GRAINS; nodeIx++)
+    }); //
+
+
     audioHasStarted = true;
+
   } //  if(!audioHasStarted
 }
-// //FUNCTION playTone ------------------------------------------------------ //
-// function playTone(freq) {
-//   tone.frequency.value = freq;
-//   tonegain.gain.setValueAtTime(0, actx.currentTime + 0.05);
-//   tonegain.gain.linearRampToValueAtTime(0.15, actx.currentTime + 0.15);
-//   tonegain.gain.setValueAtTime(0.15, actx.currentTime + 0.2);
-//   tonegain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.55);
-// }
+
+const playGrain = (grainStartTime_MS, grainDur_MS, bufNum, grEnvName) => {
+
+  let grainStartTime_SEC = grainStartTime_MS / 1000;
+  let grainDur_SEC = grainDur_MS / 1000;
+  let grEnvArray = grainEnvelopes[grEnvName].arr;
+  let t_sampBuf = samples_asBuffers[bufNum];
+
+  // Create a node to play from a buffer.
+  const grain = audioCtx.createBufferSource();
+  grain.buffer = t_sampBuf;
+
+  // Create a node to control the buffer's gain.
+  const grainGain = audioCtx.createGain()
+  grainGain.connect(DAC);
+
+  // Create a window.
+  grainGain.gain.setValueAtTime(0, grainStartTime_SEC);
+  grainGain.gain.setValueCurveAtTime(grEnvArray, grainStartTime_SEC, grainDur_SEC);
+  grain.connect(grainGain);
+
+  // Choose a random place to start.
+  const offset = Math.random() * (t_sampBuf.duration - grainDur_SEC)
+
+  // Play the grain.
+  grain.start(grainStartTime_SEC, offset, grainDur_SEC);
+};
+
+function playGrainsTest(){
+  // for (var i = 0; i < 100; i++) {
+    let tgrdur = rrand(30, 85);
+    playGrain(drumTimings_MS[12], tgrdur, 0, 'rexpodec');
+  // }
+}
+
 //#endef WEB AUDIO
 
 //#ef CONTROL PANEL
@@ -237,6 +231,20 @@ function makeControlPanel() {
   });
   controlPanelObj['startAudioBtn'] = startAudioButton;
   //###endef Start Piece Button
+
+  let playGr = mkButton({
+    canvas: controlPanelPanel.content,
+    w: CTRLPANEL_BTN_W,
+    h: CTRLPANEL_BTN_H,
+    top: CTRLPANEL_MARGIN + cpDistBtwnButts,
+    left: CTRLPANEL_MARGIN,
+    label: 'Play Grains',
+    fontSize: 14,
+    action: function() {
+      playGrainsTest();
+    }
+  });
+  controlPanelObj['playGr'] = playGr;
 
 
 } // function makeControlPanel() END

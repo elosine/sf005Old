@@ -304,6 +304,30 @@ function mkButton({
 }
 // #endefEND mkButton
 
+// #ef retrieveFileFromPath
+// USAGE: let data = await retrieveFileFromPath(path)
+// Every line after await will execute after file is retrived or the Promise is resolved
+// Text will be available as data.fileData
+function  retrieveFileFromPath(path) {
+  return new Promise((resolve, reject) => {
+    let request = new XMLHttpRequest();
+    request.open('GET', path, true);
+    request.responseType = 'text';
+    request.onload = () => resolve({
+      fileData: request.response
+    });
+    request.onerror = reject;
+    request.send();
+  })
+}
+// #endef END retrieveFileFromPath
+
+// #ef rrand
+function rrand(min, max) {
+  return Math.random() * (max - min) + min;
+}
+// #endef END rrand
+
 
 
 
