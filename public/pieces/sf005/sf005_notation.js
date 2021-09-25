@@ -25,34 +25,18 @@ let cursorLine, cursorRect;
 const CURSOR_RECT_W = 40;
 //##endef Cursor Variables
 
-//#ef Control Panel Vars
-let scoreCtrlPanel;
-const CTRLPANEL_W = 92;
-const CTRLPANEL_H = WORLD_H;
-const CTRLPANEL_BTN_W = 63;
-const CTRLPANEL_BTN_H = 35;
-const CTRLPANEL_BTN_L = (CTRLPANEL_W / 2) - (CTRLPANEL_BTN_W / 2);
-const CTRLPANEL_MARGIN = 7;
-let piece_canStart = true;
-let startBtn_isActive = true;
-let stopBtn_isActive = false;
-let pauseBtn_isActive = false;
-let gotoBtn_isActive = false;
-let joinBtn_isActive = true;
-let joinGoBtn_isActive = false;
-let restartBtn_isActive = true;
-let makeRestartButton;
-//#endef END Control Panel Vars
+
 
 //#endef GLOBAL VARIABLES
 
 //#ef INIT
 function init() {
 
+  chooseAudioInput();
   makeWorldPanel();
   makeCanvas();
   makeCursor();
-  makeControlPanel();
+  // makeControlPanel();
 
 } // function init() END
 //#endef INIT
@@ -132,7 +116,30 @@ let audioCtx, DAC;
 let samplePaths = ["/audio/sax.wav"];
 let samples_asBuffers = [];
 let audioHasStarted = false;
+let audioInputs = [];
 //#endef Audio
+
+
+
+function chooseAudioInput() {
+
+  navigator.mediaDevices.enumerateDevices().then((devices) => {
+    devices = devices.filter((device) => device.kind === 'audioinput');
+    devices.forEach((device, deviceIx) => {
+      audioInputs.push(device);
+
+    });
+
+  }).then(() => {
+    makeControlPanel();
+  })
+}
+
+
+
+
+
+
 
 function initAudio() {
 
@@ -148,7 +155,14 @@ function initAudio() {
       request.onload = () => audioCtx.decodeAudioData(request.response, (data) => samples_asBuffers.push(data));
       request.send();
 
-    }); //
+    });
+
+
+
+
+
+
+
 
 
     audioHasStarted = true;
@@ -173,7 +187,7 @@ const playGrain = (grainStartTime_MS, grainDur_MS, bufNum, grEnvName) => {
   const panNode = audioCtx.createStereoPanner();
   grainGain.connect(panNode);
   panNode.connect(DAC);
-  panNode.pan.value = rrand(-1,1);
+  panNode.pan.value = rrand(-1, 1);
   // Create a window.
   grainGain.gain.setValueAtTime(0, audioCtx.currentTime + grainStartTime_SEC);
   grainGain.gain.setValueCurveAtTime(grEnvArray, audioCtx.currentTime + grainStartTime_SEC, grainDur_SEC);
@@ -189,7 +203,7 @@ const playGrain = (grainStartTime_MS, grainDur_MS, bufNum, grEnvName) => {
 function grainCloud001(durSec) {
   let durMS = durSec * 1000;
   let drumTimings_startIx = rrandInt(0, drumTimings_MS.length);
-  let tStartTime=0;
+  let tStartTime = 0;
   let tIx = 0
   while (durMS >= tStartTime) {
     // let tgrdur = rrand(11, 17);
@@ -198,7 +212,7 @@ function grainCloud001(durSec) {
     if (dtIx >= drumTimings_startIx) {
       tStartTime = drumTimings_MS[dtIx] - drumTimings_MS[drumTimings_startIx];
     } else {
-      tStartTime = drumTimings_MS[dtIx] + drumTimings_MS[drumTimings_MS.length-1]- drumTimings_MS[drumTimings_startIx];
+      tStartTime = drumTimings_MS[dtIx] + drumTimings_MS[drumTimings_MS.length - 1] - drumTimings_MS[drumTimings_startIx];
     }
     let tGrEnv = choose(['expodec', 'expodec', 'expodec', 'expodec', 'gauss', 'expodec', 'expodec', 'expodec', 'expodec', 'expodec', 'expodec', 'expodec', 'expodec', 'rexpodec', 'blackmanHarris', 'pulse', 'pulse', 'tri']);
     playGrain(tStartTime, tgrdur, 0, tGrEnv);
@@ -209,11 +223,27 @@ function grainCloud001(durSec) {
 //#endef WEB AUDIO
 
 //#ef CONTROL PANEL
-
+//#ef Control Panel Vars
+let scoreCtrlPanel;
+const CTRLPANEL_W = 300;
+const CTRLPANEL_H = 300;
+const CTRLPANEL_BTN_W = 63;
+const CTRLPANEL_BTN_H = 35;
+const CTRLPANEL_BTN_L = (CTRLPANEL_W / 2) - (CTRLPANEL_BTN_W / 2);
+const CTRLPANEL_MARGIN = 7;
+let piece_canStart = true;
+let startBtn_isActive = true;
+let stopBtn_isActive = false;
+let pauseBtn_isActive = false;
+let gotoBtn_isActive = false;
+let joinBtn_isActive = true;
+let joinGoBtn_isActive = false;
+let restartBtn_isActive = true;
+let makeRestartButton;
+//#endef END Control Panel Vars
 
 //##ef Make Control Panel
 function makeControlPanel() {
-
   let controlPanelObj = {};
   let cpDistBtwnButts = CTRLPANEL_BTN_H + CTRLPANEL_MARGIN + 18;
 
@@ -249,6 +279,51 @@ function makeControlPanel() {
   });
   controlPanelObj['startAudioBtn'] = startAudioButton;
   //###endef Start Piece Button
+
+  //###ef Microphone Select
+  let selectDiv = document.createElement('div');
+  selectDiv.className = 'select';
+  selectDiv.style.position = 'absolute';
+  selectDiv.style.width = '250px';
+  selectDiv.style.height = '40px';
+  selectDiv.style.top = '150px';
+  selectDiv.style.left = '10px';
+  // inputSelect.style.backgroundColor = clr_lavander;
+  selectDiv.style.borderWidth = '0px';
+  selectDiv.style.padding = '0px';
+  selectDiv.style.margin = '0px';
+  controlPanelPanel.appendChild(selectDiv);
+
+  let inputSelect = document.createElement('select');
+  inputSelect.onchange = function() {
+    navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: audioInputs[this.selectedIndex].deviceId
+      }
+    });
+
+  }
+
+
+  selectDiv.appendChild(inputSelect);
+
+  audioInputs.forEach((device, inputIx) => {
+
+
+    let ogr = document.createElement("optgroup");
+    ogr.style.fontFamily = 'Lato';
+
+    ogr.style.fontVariant = 'small-caps';
+    let option = document.createElement("option");
+    option.value = inputIx;
+    option.text = device.label;
+    ogr.appendChild(option);
+    inputSelect.appendChild(ogr);
+  });
+
+
+  //###endef Microphone Select
+
 
   let playGr = mkButton({
     canvas: controlPanelPanel.content,
