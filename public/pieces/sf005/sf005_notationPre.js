@@ -32,10 +32,11 @@ const CURSOR_RECT_W = 40;
 //#ef INIT
 function init() {
 
-  ctrlPanelObj = makeControlPanel();
+  getAudioInputs(); // makeControlPanel() is run here after audio inputs are returned
   makeWorldPanel();
   makeCanvas();
   makeCursor();
+  // makeControlPanel();
 
 } // function init() END
 //#endef INIT
@@ -110,6 +111,39 @@ function makeCursor() {
 
 //#ef WEB AUDIO
 
+
+//##ef Audio Variables
+let audioCtx, DAC;
+let samplePaths = ["/audio/sax.wav"];
+let samples_asBuffers = [];
+let audioHasStarted = false;
+let audioInputs = [];
+let audioInputToUseId;
+let audioInputStream;
+let liveAudioBuffers = [];
+let audioInput_isRunning = true;
+//##endef Audio Variables
+
+//##ef Get Audio Inputs
+function getAudioInputs() {
+
+  navigator.mediaDevices.enumerateDevices().then((devices) => {
+
+    devices = devices.filter((device) => device.kind === 'audioinput');
+
+    devices.forEach((device, deviceIx) => {
+      audioInputs.push(device);
+    });
+
+  }).then(() => { // navigator.mediaDevices.enumerateDevices().then((devices) =>
+
+    makeControlPanel();
+
+  }); //}).then(() =>
+
+} // function getAudioInputs()
+//##endef Get Audio Inputs
+
 //##ef Initialize Audio
 function initAudio() {
   if (!audioHasStarted) {
@@ -136,173 +170,67 @@ function initAudio() {
 } // function initAudio()
 //##endef Initialize Audio
 
-//##ef Audio Variables
-let ctrlPanelObj;
-let audioCtx, DAC;
-let samplePaths = ["/audio/sax.wav"];
-let samples_asBuffers = [];
-let audioHasStarted = false;
-
-let audioInputs = [];
-let audioInputToUseId;
-let audioInputSelect;
-let inputStream;
-let audioBuffer = [];
-let audioBufferSize = 0;
-let bufferLength = 1024;
-let isRecording = false;
-let bufferSource;
-let audioArrayBuffers = [];
-let currAudioCaptureObj = {};
-//##endef Audio Variables
-
-//##ef startAudioCapture
-
+//##ef Start Audio Capture
 function startAudioCapture() {
 
-  const audioInputSelect = ctrlPanelObj.inputSelect;
-  const selectors = [audioInputSelect];
-
-  navigator.mediaDevices.enumerateDevices()
-    .then(gotDevices)
-    .then(start)
-    .catch(handleError);
-
-  function gotDevices(deviceInfos) {
-    // Handles being called several times to update labels. Preserve values.
-    const values = selectors.map(select => select.value);
-    selectors.forEach(select => {
-      while (select.firstChild) {
-        select.removeChild(select.firstChild);
-      }
-    });
-    for (let i = 0; i !== deviceInfos.length; ++i) {
-      const deviceInfo = deviceInfos[i];
-      const option = document.createElement('option');
-      option.value = deviceInfo.deviceId;
-      if (deviceInfo.kind === 'audioinput') {
-        option.text = deviceInfo.label || `microphone ${audioInputSelect.length + 1}`;
-        audioInputSelect.appendChild(option);
-      }
-    }
-    selectors.forEach((select, selectorIndex) => {
-      if (Array.prototype.slice.call(select.childNodes).some(n => n.value === values[selectorIndex])) {
-        select.value = values[selectorIndex];
-      }
-    });
+  // Second call to getUserMedia() with changed device may cause error, so we need to release stream before changing device
+  if (window.stream) {
+    stream.getAudioTracks()[0].stop();
   }
 
-  audioInputSelect.onchange = start;
-
-  function start() {
-    // Second call to getUserMedia() with changed device may cause error, so we need to release stream before changing device
-    if (window.stream) {
-      stream.getAudioTracks()[0].stop();
-    }
-
-    const audioSource = audioInputSelect.value;
-
-    const constraints = {
-      audio: {
-        deviceId: audioSource ? {
-          exact: audioSource
-        } : undefined
-      }
-    };
-
-    navigator.mediaDevices.getUserMedia(constraints).then(manageStream).catch(handleError);
-  }
-
-  function manageStream(stream) {
-    window.stream = stream; // make stream available to console
-    inputStream = stream;
-  }
-
-  function handleError(error) {
-    console.log('navigator.MediaDevices.getUserMedia error: ', error.message, error.name);
-  }
-
-} // startAudioCapture
-//##endef startAudioCapture
-
-//##ef processAudioInput
-function startAudioInputCapture() {
-  if(isRecording) return;
-  isRecording = true;
-   currAudioCaptureObj['audioBuffer'] = [];
-
-    currAudioCaptureObj['audioBufferSize'] = 0;
-
-  currAudioCaptureObj['source'] = audioCtx.createMediaStreamSource(inputStream);
-  currAudioCaptureObj['processor'] = audioCtx.createScriptProcessor(bufferLength, 1, 1);
-
-  currAudioCaptureObj.source.connect(currAudioCaptureObj.processor);
-  currAudioCaptureObj.processor.connect(DAC);
-
-
-  currAudioCaptureObj.processor.onaudioprocess = function(audioProcessingEvent) {
-    if (isRecording) {
-
-      const realtimeBuffer = new Float32Array(bufferLength);
-      audioProcessingEvent.inputBuffer.copyFromChannel(realtimeBuffer, 0);
-
-      // Create an array of buffer array until the user finishes recording
-      currAudioCaptureObj.audioBuffer.push(realtimeBuffer);
-      currAudioCaptureObj.audioBufferSize += bufferLength;
-
+  const constraints = { //set input device
+    audio: {
+      deviceId: audioInputToUseId
     }
   };
 
-}
+  navigator.mediaDevices.getUserMedia(constraints)
+    .then((stream) => {
+      window.stream = stream; // make stream available to console
+      audioInputStream = stream;
+    })
+    .catch((error) => {
+      console.log('navigator.MediaDevices.getUserMedia error: ', error.message, error.name);
+    });
+
+} // function startAudioCapture()
+//##endef Start Audio Capture
+
+//##ef Write Audio to Buffer
+
+function writeAudioToBuffer(stream) {
+
+  let bufferObj = {};
+  let processorBufSz = 1024;
+
+  const streamSource = audioCtx.createMediaStreamSource(stream);
+  bufferObj['streamSource'] = streamSource;
+  const processorNode = audioCtx.createScriptProcessor(processorBufSz, 1, 1);
+  bufferObj['processorNode'] = processorNode;
+
+  streamSource.connect(processorNode);
+  processorNode.connect(DAC);
+
+  processorNode.onaudioprocess = function(event) { //runs when processor buffer is filled ie 1024
+
+    if (audioInput_isRunning) {
+      this._realtimeBuffer = audioProcessingEvent.inputBuffer.getChannelData(0);
+
+        // Create an array of buffer array until the user finishes recording
+        this._audioBuffer.push(this._realtimeBuffer);
+        this._audioBufferSize += this._bufferLength;
+    } //if (audioInput_isRunning)
 
 
-function stopAudioInputCapture() {
-  if(!isRecording) return;
-
-  isRecording = false;
-  let mergedBuffer = mergeBuffers(currAudioCaptureObj.audioBuffer, currAudioCaptureObj.audioBufferSize);
-  currAudioCaptureObj['arrayBuffer']  = audioCtx.createBuffer(1, mergedBuffer.length, 44100);
-  currAudioCaptureObj['tempBuf']  = currAudioCaptureObj.arrayBuffer.getChannelData(0);
-
-  for (let i = 0, len = mergedBuffer.length; i < len; i++) {
-    currAudioCaptureObj.tempBuf[i] = mergedBuffer[i];
-  }
-
-  audioArrayBuffers.push(currAudioCaptureObj.arrayBuffer);
-
-  function mergeBuffers(bufferArray, bufferSize) {
-    // Not merging buffers because there is less than 2 buffers from onaudioprocess event and hence no need to merge
-    if (bufferSize < 2) return;
-
-    let result = new Float32Array(bufferSize);
-
-    for (let i = 0, len = bufferArray.length, offset = 0; i < len; i++) {
-      result.set(bufferArray[i], offset);
-      offset += bufferArray[i].length;
-    }
-    return result;
-  } //function mergeBuffers(bufferArray, bufferSize)
-
-
-
-} // function stopAudioInputCapture()
-
-
-
-
-//##endef processAudioInput
-
-
-function playit() {
-  let tempBufSrc = audioCtx.createBufferSource();
-  tempBufSrc.buffer = audioArrayBuffers[1];
-
-  tempBufSrc.connect(DAC);
-  tempBufSrc.start(audioCtx.currentTime)
-}
+} // processor.onaudioprocess = function(event)
 
 
 
+} // function writeAudioToBuffer(durSec)
+
+
+
+//##endef Write Audio to Buffer
 
 
 
@@ -365,7 +293,7 @@ function grainCloud001(durSec) {
 //#ef Control Panel Vars
 let scoreCtrlPanel;
 const CTRLPANEL_W = 300;
-const CTRLPANEL_H = 400;
+const CTRLPANEL_H = 300;
 const CTRLPANEL_MARGIN = 8;
 const CTRLPANEL_MARGINS = CTRLPANEL_MARGIN * 2;
 const BUTTON_MARGIN = 8;
@@ -425,11 +353,28 @@ function makeControlPanel() {
 
   let inputSelect = document.createElement('select');
   inputSelect.className = 'select';
-  inputSelect.id = 'audioSource';
+
+  inputSelect.onchange = function() {
+    audioInputToUseId = audioInputs[this.selectedIndex].deviceId; //this.selectedIndex-1 cause option 0 will be 'choose input'
+  } // inputSelect.onchange = function()
 
   inputSelectDiv.appendChild(inputSelect);
 
-  controlPanelObj['inputSelect'] = inputSelect;
+  // let ogr = document.createElement("optgroup");
+  // ogr.style.fontFamily = 'Lato';
+  // ogr.style.fontVariant = 'small-caps';
+
+  let iOpt = document.createElement("option");
+  iOpt.value = -1;
+  iOpt.text = 'Please choose input';
+  inputSelect.appendChild(iOpt);
+
+  audioInputs.forEach((device, inputIx) => {
+    let option = document.createElement("option");
+    option.value = inputIx;
+    option.text = device.label;
+    inputSelect.appendChild(option);
+  }); //audioInputs.forEach((device, inputIx)
 
   //###endef Microphone Select
 
@@ -459,8 +404,7 @@ function makeControlPanel() {
     fontSize: 14,
     action: function() {
       // grainCloud001(30);
-      startAudioInputCapture();
-
+      writeAudioToBuffer(audioInputStream);
     }
   });
   controlPanelObj['playGr'] = playGr;
@@ -474,27 +418,10 @@ function makeControlPanel() {
     label: 'playbuf',
     fontSize: 14,
     action: function() {
-      stopAudioInputCapture();
+      audioInput_isRunning = false;
     }
   });
 
-
-
-  let play = mkButton({
-    canvas: controlPanelPanel.content,
-    w: CTRLPANEL_BTN_W,
-    h: CTRLPANEL_BTN_H,
-    top: CTRLPANEL_MARGIN + (BUTTON_GAP * 4),
-    left: CTRLPANEL_MARGIN,
-    label: 'playbuf2',
-    fontSize: 14,
-    action: function() {
-      playit();
-    }
-  });
-
-
-  return controlPanelObj;
 } // function makeControlPanel() END
 //##endef Make Control Panel
 

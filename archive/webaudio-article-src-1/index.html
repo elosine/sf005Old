@@ -1,0 +1,26 @@
+<style>
+  /* uiContainer covers the whole screen */
+  #uiContainer {
+    width: 100vw;
+    height: 100vh;
+  }
+  .alignBottomCenter {
+    position: absolute;
+    left: 50%;
+    bottom: 10%;
+  }
+  button.noBackground {
+    background: none;
+    border: none;
+  }
+</style>
+
+<div id="uiContainer">
+  <button id="recordMic" class="noBackground alignBottomCenter">
+    <!-- Insert the button icon here -->
+    Mic button
+  </button>
+
+  <!-- Used for events -->
+  <div id="micInputVisualizer"></div>
+</div>

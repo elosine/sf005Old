@@ -150,10 +150,8 @@ let inputStream;
 let audioBuffer = [];
 let audioBufferSize = 0;
 let bufferLength = 1024;
-let isRecording = false;
+let isRecording = true;
 let bufferSource;
-let audioArrayBuffers = [];
-let currAudioCaptureObj = {};
 //##endef Audio Variables
 
 //##ef startAudioCapture
@@ -227,29 +225,26 @@ function startAudioCapture() {
 
 //##ef processAudioInput
 function startAudioInputCapture() {
-  if(isRecording) return;
-  isRecording = true;
-   currAudioCaptureObj['audioBuffer'] = [];
 
-    currAudioCaptureObj['audioBufferSize'] = 0;
+  const source = audioCtx.createMediaStreamSource(inputStream);
+  const processor = audioCtx.createScriptProcessor(bufferLength, 1, 1);
 
-  currAudioCaptureObj['source'] = audioCtx.createMediaStreamSource(inputStream);
-  currAudioCaptureObj['processor'] = audioCtx.createScriptProcessor(bufferLength, 1, 1);
+  source.connect(processor);
+  processor.connect(DAC);
 
-  currAudioCaptureObj.source.connect(currAudioCaptureObj.processor);
-  currAudioCaptureObj.processor.connect(DAC);
-
-
-  currAudioCaptureObj.processor.onaudioprocess = function(audioProcessingEvent) {
+  processor.onaudioprocess = function(audioProcessingEvent) {
     if (isRecording) {
 
+      // let realtimeBuffer = audioProcessingEvent.inputBuffer.getChannelData(0);
       const realtimeBuffer = new Float32Array(bufferLength);
       audioProcessingEvent.inputBuffer.copyFromChannel(realtimeBuffer, 0);
 
-      // Create an array of buffer array until the user finishes recording
-      currAudioCaptureObj.audioBuffer.push(realtimeBuffer);
-      currAudioCaptureObj.audioBufferSize += bufferLength;
 
+
+      // Create an array of buffer array until the user finishes recording
+      audioBuffer.push(realtimeBuffer);
+      console.log();
+      audioBufferSize += bufferLength;
     }
   };
 
@@ -257,18 +252,22 @@ function startAudioInputCapture() {
 
 
 function stopAudioInputCapture() {
-  if(!isRecording) return;
 
   isRecording = false;
-  let mergedBuffer = mergeBuffers(currAudioCaptureObj.audioBuffer, currAudioCaptureObj.audioBufferSize);
-  currAudioCaptureObj['arrayBuffer']  = audioCtx.createBuffer(1, mergedBuffer.length, 44100);
-  currAudioCaptureObj['tempBuf']  = currAudioCaptureObj.arrayBuffer.getChannelData(0);
+  bufferSource = audioCtx.createBufferSource();
+  // bufferSource.connect(DAC);
+
+  let mergedBuffer = mergeBuffers(audioBuffer, audioBufferSize);
+  let arrayBuffer = audioCtx.createBuffer(1, mergedBuffer.length, 44100);
+  let buffer = arrayBuffer.getChannelData(0);
 
   for (let i = 0, len = mergedBuffer.length; i < len; i++) {
-    currAudioCaptureObj.tempBuf[i] = mergedBuffer[i];
+    buffer[i] = mergedBuffer[i];
   }
 
-  audioArrayBuffers.push(currAudioCaptureObj.arrayBuffer);
+  bufferSource.buffer = arrayBuffer;
+  console.log(bufferSource.buffer.getChannelData(0));
+
 
   function mergeBuffers(bufferArray, bufferSize) {
     // Not merging buffers because there is less than 2 buffers from onaudioprocess event and hence no need to merge
@@ -283,8 +282,6 @@ function stopAudioInputCapture() {
     return result;
   } //function mergeBuffers(bufferArray, bufferSize)
 
-
-
 } // function stopAudioInputCapture()
 
 
@@ -294,11 +291,9 @@ function stopAudioInputCapture() {
 
 
 function playit() {
-  let tempBufSrc = audioCtx.createBufferSource();
-  tempBufSrc.buffer = audioArrayBuffers[1];
 
-  tempBufSrc.connect(DAC);
-  tempBufSrc.start(audioCtx.currentTime)
+  bufferSource.connect(DAC);
+  bufferSource.start(audioCtx.currentTime)
 }
 
 
