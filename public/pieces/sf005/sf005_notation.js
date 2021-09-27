@@ -1,19 +1,39 @@
 //#ef GLOBAL VARIABLES
 
+//##ef General Variables
+let scoreData;
+//##endef General Variables
 
+//##ef Timing
+const FRAMERATE = 60;
+let FRAMECOUNT = 0;
+const PX_PER_SEC = 50;
+const PX_PER_HALFSEC = PX_PER_SEC / 2;
+const PX_PER_FRAME = PX_PER_SEC / FRAMERATE;
+const MS_PER_FRAME = 1000.0 / FRAMERATE;
+const LEAD_IN_TIME_SEC = 2;
+const LEAD_IN_TIME_MS = LEAD_IN_TIME_SEC * 1000;
+const LEAD_IN_FRAMES = LEAD_IN_TIME_SEC * FRAMERATE;
+let startTime_epochTime_MS = 0;
+
+let pauseState = 0;
+let timePaused = 0;
+let pieceClockAdjustment = 0;
+let displayClock;
+//##endef Timing
 
 //##ef World Panel Variables
 let worldPanel, worldSvg;
 const DEVICE_SCREEN_W = window.screen.width;
 const DEVICE_SCREEN_H = window.screen.height;
-const MAX_W = 633;
+const MAX_W = 633; //to fit phones
 const MAX_H = 240;
 const WORLD_W = Math.min(DEVICE_SCREEN_W, MAX_W);
 const WORLD_H = Math.min(DEVICE_SCREEN_H, MAX_H);
 const WORLD_CENTER = WORLD_W / 2;
-const WORLD_THIRD = WORLD_W / 3;
-const WORLD_QTR = WORLD_W / 4;
 const WORLD_MARGIN = 4;
+const MAX_NUM_PORTALS = Math.round(WORLD_W / PX_PER_HALFSEC); //enough bricks to have 1 every 0.5 seconds for the length of the canvas
+const WORLD_W_FRAMES = WORLD_W / PX_PER_FRAME;
 //##endef World Panel Variables
 
 //##ef Canvas Variables
@@ -23,8 +43,34 @@ let canvas;
 //##ef Cursor Variables
 let cursorLine, cursorRect;
 const CURSOR_RECT_W = 40;
+const CURSOR_X = WORLD_W / 4;
+const NUM_FRAMES_WORLD_R_TO_CURSOR = Math.round((WORLD_W - CURSOR_X) / PX_PER_FRAME);
+const NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L = Math.round(CURSOR_X / PX_PER_FRAME);
 //##endef Cursor Variables
 
+//#ef Animation Engine Variables
+let cumulativeChangeBtwnFrames_MS = 0;
+let epochTimeOfLastFrame_MS = 0;
+let animationEngineCanRun = true;
+//#endef END Animation Engine Variables
+
+//#ef SOCKET IO
+let ioConnection;
+
+if (window.location.hostname == 'localhost') {
+  ioConnection = io();
+} else {
+  ioConnection = io.connect(window.location.hostname);
+}
+const SOCKET = ioConnection;
+//#endef > END SOCKET IO
+
+//#ef TIMESYNC
+const TS = timesync.create({
+  server: '/timesync',
+  interval: 1000
+});
+//#endef TIMESYNC
 
 
 //#endef GLOBAL VARIABLES
@@ -32,13 +78,92 @@ const CURSOR_RECT_W = 40;
 //#ef INIT
 function init() {
 
+  scoreData = generateScoreData();
+
   ctrlPanelObj = makeControlPanel();
   makeWorldPanel();
   makeCanvas();
   makeCursor();
-
+  makeLiveSampPortals();
+  requestAnimationFrame(animationEngine);
 } // function init() END
 //#endef INIT
+
+//#ef GENERATE SCORE DATA
+function generateScoreData() {
+
+
+  //##ef GENERATE SCORE DATA - VARIABLES
+  let scoreDataObject = {};
+  //##endef GENERATE SCORE DATA - VARIABLES
+
+  //##ef Live Sampling
+  //Event GoTime & Durations
+  let tTimeInc = 0;
+  for (let i = 0; i < numLiveSamps; i++) {
+    let tObj = {};
+    let tGap = rrand(9, 13);
+    tTimeInc += tGap;
+    let tDur = rrand(7, 11);
+    tObj['goTime'] = tTimeInc;
+    tObj['dur'] = tDur;
+    liveSamp_timesDurs.push(tObj);
+  }
+  // RESULT: liveSamp_timesDurs {goTime:,dur}
+  //Generate more live sampling events later on in the piece
+  tTimeInc = tTimeInc + rrand(240, 420);
+  for (let i = 0; i < numLiveSamps; i++) {
+    let tObj = {};
+    let tDur = rrand(7, 11);
+    tObj['goTime'] = tTimeInc;
+    tObj['dur'] = tDur;
+    liveSamp_timesDurs.push(tObj);
+    let tGap = rrand(19, 33);
+    tTimeInc += tGap;
+  }
+  tTimeInc = tTimeInc + rrand(240, 420);
+  for (let i = 0; i < numLiveSamps; i++) {
+    let tObj = {};
+    let tDur = rrand(7, 11);
+    tObj['goTime'] = tTimeInc;
+    tObj['dur'] = tDur;
+    liveSamp_timesDurs.push(tObj);
+    let tGap = rrand(19, 33);
+    tTimeInc += tGap;
+  }
+  // RESULT: liveSamp_timesDurs {goTime:,dur}
+  // Calculate live sampling loop dur frames & make set of empty arrays
+  let timeGapBeforeLooping = rrand(240, 420); //gap before the loop restarts
+  let liveSampEvents_byFrame = [];
+  let liveSampingLoop_totalNumFrames = Math.ceil((liveSamp_timesDurs[liveSamp_timesDurs.length - 1].goTime + liveSamp_timesDurs[liveSamp_timesDurs.length - 1].dur + timeGapBeforeLooping) * FRAMERATE);
+  for (var i = 0; i < liveSampingLoop_totalNumFrames; i++) liveSampEvents_byFrame.push([]);
+  // RESULT: liveSampEvents_byFrame
+  // For each live samp event, calculate which frames it is on scene, and its go frame and stop frame and populate liveSampEvents_byFrame
+  liveSamp_timesDurs.forEach((timeDurObj) => { //{goTime:,dur}
+    let goFrm = Math.round(timeDurObj.goTime * FRAMERATE);
+    console.log(timeDurObj.goTime + ' ' + goFrm);
+    let stopFrm = Math.round(goFrm + (timeDurObj.dur * FRAMERATE));
+    let firstFrameOn = goFrm - NUM_FRAMES_WORLD_R_TO_CURSOR;
+    let lastFrameOn = stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L
+    for (var frmIx = Math.max(firstFrameOn,0); frmIx < lastFrameOn; frmIx++) {
+      let tobj = {}; //{x:,goStop:}
+      tobj['x'] = WORLD_W - ((frmIx - firstFrameOn) * PX_PER_FRAME);
+      if (frmIx == goFrm) tobj['goStop'] = 1;
+      else if (frmIx == stopFrm) tobj['goStop'] = 0;
+      else tobj['goStop'] = -1;
+      liveSampEvents_byFrame[frmIx].push(tobj);
+    }
+
+  });
+  //RESULT: liveSampEvents_byFrame (DONE)
+  scoreDataObject['liveSamplingPortals'] = liveSampEvents_byFrame;
+  console.log(liveSampEvents_byFrame);
+  //##endef Live Sampling
+
+
+  return scoreDataObject;
+} // function generateScoreData()
+//#endef GENERATE SCORE DATA
 
 //#ef BUILD WORLD
 
@@ -81,7 +206,7 @@ function makeCursor() {
 
   cursorRect = mkSvgRect({
     svgContainer: canvas,
-    x: WORLD_THIRD,
+    x: CURSOR_X,
     y: 1,
     w: CURSOR_RECT_W,
     h: WORLD_H - 2,
@@ -93,9 +218,9 @@ function makeCursor() {
 
   cursorLine = mkSvgLine({
     svgContainer: canvas,
-    x1: WORLD_THIRD,
+    x1: CURSOR_X,
     y1: 0,
-    x2: WORLD_THIRD,
+    x2: CURSOR_X,
     y2: WORLD_W,
     stroke: 'yellow',
     strokeW: 4
@@ -104,6 +229,91 @@ function makeCursor() {
 
 } // function makeCursor() END
 //##endef Make Cursor
+
+//##ef Live Sampling Portals
+
+
+//###ef Live Sampling Portals VARS
+let liveSamp_timesDurs = [];
+let liveSamplingPortals = [];
+let numLiveSamps = 3;
+let liveSampEvents = []; //{lenPx:,startFrame:,endFrame:}
+//###endef Live Sampling Portals VARS
+
+//###ef Live Sampling Portals MAKE
+function makeLiveSampPortals() {
+  //Make Enough for events every 1/2 second
+  liveSamp_timesDurs.forEach((lspObj) => {
+    let w = lspObj.dur * PX_PER_SEC;
+    let liveSampPortal = mkSvgRect({
+      svgContainer: canvas,
+      x: 0,
+      y: 8,
+      w: w,
+      h: 20,
+      fill: clr_limeGreen,
+      stroke: 'black',
+      strokeW: 0,
+      roundR: 0
+    });
+    liveSampPortal.setAttributeNS(null, 'display', 'none');
+    liveSamplingPortals.push(liveSampPortal);
+  });
+}
+//###endef Live Sampling Portals MAKE
+
+//###ef Live Sampling Portals WIPE
+function wipeLiveSampPortals() {
+  liveSamplingPortals.forEach((lsp) => {
+    lsp.setAttributeNS(null, 'display', 'none');
+  });
+}
+//###endef Live Sampling Portals WIPE
+
+//###ef Live Sampling Portals UPDATE
+function updateLiveSamplingPortals() {
+  if (FRAMECOUNT >= 0) {
+
+    let setIx = FRAMECOUNT % scoreData.liveSamplingPortals.length;
+    scoreData.liveSamplingPortals[setIx].forEach((lspObj, lspIx) => {
+      liveSamplingPortals[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
+      liveSamplingPortals[lspIx].setAttributeNS(null, 'display', "yes");
+      if (lspObj.goStop == 1) {
+        //go action here
+      } else if (lspObj.goStop == 0) {
+        //stop action here
+      }
+    });
+
+  } // if (FRAMECOUNT >= 0)
+
+  // LEAD IN
+  if (FRAMECOUNT < 0) {
+
+    // scoreData.leadIn_tempoFretLocations_perTempo.forEach((thisTempo_tfSet, tempoIx) => { // Set of Tempo Frets for each Tempo
+    //
+    //   if (-FRAMECOUNT <= thisTempo_tfSet.length) { //FRAMECOUNT is negative; only start lead in set if FRAMECOUNT = the length of lead in tf set for this tempo
+    //
+    //     let tfSetIx = thisTempo_tfSet.length + FRAMECOUNT; //count from FRAMECOUNT/thisTempo_tfSet.length and go backwards; ie the first index in set is the furtherest away
+    //
+    //     thisTempo_tfSet[tfSetIx].forEach((tfLoc, tfIx) => { //each tf location for this tempo
+    //
+    //       tempoFretsPerTrack[tempoIx][tfIx].position.z = tfLoc; //tempoFretsPerTrack is set of tfs already created by tempo
+    //       tempoFretsPerTrack[tempoIx][tfIx].visible = true;
+    //
+    //     }); // tempoFrets_leadInFrames_perTempo.forEach((thisTempo_tfSet, tempoIx) => END
+    //
+    //   }
+    //
+    // }); //tempoFrets_leadInFrames_perTempo.forEach((thisTempo_tfSet, tempoIx) => END
+
+  } // if (FRAMECOUNT < 0) END
+
+}
+//###endef Live Sampling Portals UPDATE
+
+
+//##endef Live Sampling Portals
 
 
 //#endef BUILD WORLD
@@ -144,16 +354,14 @@ let samples_asBuffers = [];
 let audioHasStarted = false;
 
 let audioInputs = [];
-let audioInputToUseId;
 let audioInputSelect;
 let inputStream;
 let audioBuffer = [];
 let audioBufferSize = 0;
 let bufferLength = 1024;
 let isRecording = false;
-let bufferSource;
-let audioArrayBuffers = [];
 let currAudioCaptureObj = {};
+let liveSampBuffers = [];
 //##endef Audio Variables
 
 //##ef startAudioCapture
@@ -227,55 +435,54 @@ function startAudioCapture() {
 
 //##ef processAudioInput
 function startAudioInputCapture() {
-  if(isRecording) return;
+
+  if (isRecording) return;
   isRecording = true;
-   currAudioCaptureObj['audioBuffer'] = [];
 
-    currAudioCaptureObj['audioBufferSize'] = 0;
+  const source = audioCtx.createMediaStreamSource(inputStream);
+  const processor = audioCtx.createScriptProcessor(bufferLength, 1, 1);
+  currAudioCaptureObj['processor'] = processor;
+  currAudioCaptureObj['source'] = source;
 
-  currAudioCaptureObj['source'] = audioCtx.createMediaStreamSource(inputStream);
-  currAudioCaptureObj['processor'] = audioCtx.createScriptProcessor(bufferLength, 1, 1);
+  source.connect(processor);
+  processor.connect(DAC);
 
-  currAudioCaptureObj.source.connect(currAudioCaptureObj.processor);
-  currAudioCaptureObj.processor.connect(DAC);
-
-
-  currAudioCaptureObj.processor.onaudioprocess = function(audioProcessingEvent) {
+  processor.onaudioprocess = function(audioProcessingEvent) {
     if (isRecording) {
 
       const realtimeBuffer = new Float32Array(bufferLength);
       audioProcessingEvent.inputBuffer.copyFromChannel(realtimeBuffer, 0);
 
       // Create an array of buffer array until the user finishes recording
-      currAudioCaptureObj.audioBuffer.push(realtimeBuffer);
-      currAudioCaptureObj.audioBufferSize += bufferLength;
-
+      audioBuffer.push(realtimeBuffer);
+      audioBufferSize += bufferLength;
     }
   };
 
-}
-
+} // function startAudioInputCapture()
 
 function stopAudioInputCapture() {
-  if(!isRecording) return;
-
+  if (!isRecording) return;
   isRecording = false;
-  let mergedBuffer = mergeBuffers(currAudioCaptureObj.audioBuffer, currAudioCaptureObj.audioBufferSize);
-  currAudioCaptureObj['arrayBuffer']  = audioCtx.createBuffer(1, mergedBuffer.length, 44100);
-  currAudioCaptureObj['tempBuf']  = currAudioCaptureObj.arrayBuffer.getChannelData(0);
+
+  let mergedBuffer = mergeBuffers(audioBuffer, audioBufferSize);
+  let arrayBuffer = audioCtx.createBuffer(1, mergedBuffer.length, 44100);
+  let buffer = arrayBuffer.getChannelData(0);
 
   for (let i = 0, len = mergedBuffer.length; i < len; i++) {
-    currAudioCaptureObj.tempBuf[i] = mergedBuffer[i];
+    buffer[i] = mergedBuffer[i];
   }
 
-  audioArrayBuffers.push(currAudioCaptureObj.arrayBuffer);
+  liveSampBuffers.push(arrayBuffer);
+
+  audioBuffer = [];
+  audioBufferSize = 0;
+  currAudioCaptureObj.source.disconnect(currAudioCaptureObj.processor);
+  currAudioCaptureObj.processor.disconnect(DAC);
 
   function mergeBuffers(bufferArray, bufferSize) {
-    // Not merging buffers because there is less than 2 buffers from onaudioprocess event and hence no need to merge
-    if (bufferSize < 2) return;
-
+    if (bufferSize < 2) return; // Not merging buffers because there is less than 2 buffers from onaudioprocess event and hence no need to merge
     let result = new Float32Array(bufferSize);
-
     for (let i = 0, len = bufferArray.length, offset = 0; i < len; i++) {
       result.set(bufferArray[i], offset);
       offset += bufferArray[i].length;
@@ -283,28 +490,17 @@ function stopAudioInputCapture() {
     return result;
   } //function mergeBuffers(bufferArray, bufferSize)
 
-
-
 } // function stopAudioInputCapture()
 
-
-
-
-//##endef processAudioInput
-
-
-function playit() {
-  let tempBufSrc = audioCtx.createBufferSource();
-  tempBufSrc.buffer = audioArrayBuffers[1];
-
-  tempBufSrc.connect(DAC);
-  tempBufSrc.start(audioCtx.currentTime)
+function playit(bufNum) {
+  let bufferSource = audioCtx.createBufferSource();
+  bufferSource.connect(DAC);
+  bufferSource.buffer = liveSampBuffers[bufNum];
+  bufferSource.start(audioCtx.currentTime)
 }
 
 
-
-
-
+//##endef processAudioInput
 
 //##ef Granular Synthesis
 const playGrain = (grainStartTime_MS, grainDur_MS, bufNum, grEnvName) => {
@@ -365,7 +561,7 @@ function grainCloud001(durSec) {
 //#ef Control Panel Vars
 let scoreCtrlPanel;
 const CTRLPANEL_W = 300;
-const CTRLPANEL_H = 400;
+const CTRLPANEL_H = 600;
 const CTRLPANEL_MARGIN = 8;
 const CTRLPANEL_MARGINS = CTRLPANEL_MARGIN * 2;
 const BUTTON_MARGIN = 8;
@@ -489,9 +685,41 @@ function makeControlPanel() {
     label: 'playbuf2',
     fontSize: 14,
     action: function() {
-      playit();
+      playit(0);
     }
   });
+
+
+
+  let play2 = mkButton({
+    canvas: controlPanelPanel.content,
+    w: CTRLPANEL_BTN_W,
+    h: CTRLPANEL_BTN_H,
+    top: CTRLPANEL_MARGIN + (BUTTON_GAP * 5),
+    left: CTRLPANEL_MARGIN,
+    label: 'playbuf3',
+    fontSize: 14,
+    action: function() {
+      playit(1);
+    }
+  });
+
+
+
+
+  let play3 = mkButton({
+    canvas: controlPanelPanel.content,
+    w: CTRLPANEL_BTN_W,
+    h: CTRLPANEL_BTN_H,
+    top: CTRLPANEL_MARGIN + (BUTTON_GAP * 6),
+    left: CTRLPANEL_MARGIN,
+    label: 'playbuf4',
+    fontSize: 14,
+    action: function() {
+      playit(2);
+    }
+  });
+
 
 
   return controlPanelObj;
@@ -504,9 +732,71 @@ function makeControlPanel() {
 
 //#endef CONTROL PANEL
 
+//#ef ANIMATION
 
 
+//##ef Animation Engine
+function animationEngine(timestamp) { //timestamp not used; timeSync server library used instead
 
+  let ts_Date = new Date(TS.now()); //Date stamp object from TimeSync library
+  let tsNowEpochTime_MS = ts_Date.getTime();
+  cumulativeChangeBtwnFrames_MS += tsNowEpochTime_MS - epochTimeOfLastFrame_MS;
+  epochTimeOfLastFrame_MS = tsNowEpochTime_MS; //update epochTimeOfLastFrame_MS for next frame
+
+  while (cumulativeChangeBtwnFrames_MS >= MS_PER_FRAME) { //if too little change of clock time will wait until 1 animation frame's worth of MS before updating etc.; if too much change will update several times until caught up with clock time
+
+    if (cumulativeChangeBtwnFrames_MS > (MS_PER_FRAME * FRAMERATE)) cumulativeChangeBtwnFrames_MS = MS_PER_FRAME; //escape hatch if more than 1 second of frames has passed then just skip to next update according to clock
+
+    pieceClock(tsNowEpochTime_MS);
+    wipe();
+    update();
+    draw();
+
+    cumulativeChangeBtwnFrames_MS -= MS_PER_FRAME; //subtract from cumulativeChangeBtwnFrames_MS 1 frame worth of MS until while cond is satisified
+
+  } // while (cumulativeChangeBtwnFrames_MS >= MS_PER_FRAME) END
+
+  if (animationEngineCanRun) requestAnimationFrame(animationEngine); //animation engine gate: animationEngineCanRun
+  // if (FRAMECOUNT < 120) requestAnimationFrame(animationEngine); //animation engine gate: animationEngineCanRun
+} // function animationEngine(timestamp) END
+//##endef Animation Engine END
+
+//##ef Piece Clock
+function pieceClock(nowEpochTime) {
+
+  PIECE_TIME_MS = nowEpochTime - startTime_epochTime_MS - LEAD_IN_TIME_MS - pieceClockAdjustment;
+  FRAMECOUNT = Math.round((PIECE_TIME_MS / 1000) * FRAMERATE); //Update FRAMECOUNT based on timeSync Time //if in lead-in FRAMECOUNT will be negative
+  // calcDisplayClock(PIECE_TIME_MS);
+
+}
+//##endef Piece Clock
+
+
+//#endef ANIMATION
+
+//#ef WIPE/UPDATE/DRAW
+
+
+//##ef Wipe Function
+function wipe() {
+  wipeLiveSampPortals();
+} // function wipe() END
+//##endef Wipe Function
+
+//##ef Update Function
+function update() {
+  updateLiveSamplingPortals();
+}
+//##endef Update Function
+
+//##ef Draw Function
+function draw() {
+
+}
+//##endef Draw Function
+
+
+//#endef WIPE/UPDATE/DRAW
 
 
 
