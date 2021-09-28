@@ -42,6 +42,7 @@ const WORLD_CENTER = WORLD_W / 2;
 const WORLD_MARGIN = 4;
 const MAX_NUM_PORTALS = Math.round(WORLD_W / PX_PER_HALFSEC); //enough bricks to have 1 every 0.5 seconds for the length of the canvas
 const WORLD_W_FRAMES = WORLD_W / PX_PER_FRAME;
+const PORTAL_H = 30;
 //##endef World Panel Variables
 
 //##ef Canvas Variables
@@ -101,7 +102,6 @@ function init() {
 //#ef GENERATE SCORE DATA
 function generateScoreData() {
 
-
   //##ef GENERATE SCORE DATA - VARIABLES
   let scoreDataObject = {};
   //##endef GENERATE SCORE DATA - VARIABLES
@@ -109,9 +109,11 @@ function generateScoreData() {
   //##ef Live Sampling
   //Event GoTime & Durations
   let tTimeInc = 0;
+  let gapMin = 21;
+  let gapMax = 28;
   for (let i = 0; i < numLiveSamps; i++) {
     let tObj = {};
-    let tGap = rrand(9, 13);
+    let tGap = rrand(gapMin, gapMax);
     tTimeInc += tGap;
     let tDur = rrand(7, 11);
     tObj['goTime'] = tTimeInc;
@@ -127,7 +129,7 @@ function generateScoreData() {
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
     liveSamp_timesDurs.push(tObj);
-    let tGap = rrand(19, 33);
+    let tGap = rrand(gapMin, gapMax);
     tTimeInc += tGap;
   }
   tTimeInc = tTimeInc + rrand(240, 420);
@@ -137,7 +139,7 @@ function generateScoreData() {
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
     liveSamp_timesDurs.push(tObj);
-    let tGap = rrand(19, 33);
+    let tGap = rrand(gapMin, gapMax);
     tTimeInc += tGap;
   }
   // RESULT: liveSamp_timesDurs {goTime:,dur}
@@ -167,13 +169,11 @@ function generateScoreData() {
   scoreDataObject['liveSamplingPortals'] = liveSampEvents_byFrame;
   //##endef Live Sampling
 
-
   return scoreDataObject;
 } // function generateScoreData()
 //#endef GENERATE SCORE DATA
 
 //#ef BUILD WORLD
-
 
 //##ef Make World Panel
 function makeWorldPanel() {
@@ -243,21 +243,23 @@ function makeCursor() {
 //###ef Live Sampling Portals VARS
 let liveSamp_timesDurs = [];
 let liveSamplingPortals = [];
+let liveSamplingPortalTexts = [];
 let numLiveSamps = 3;
-let liveSampEvents = []; //{lenPx:,startFrame:,endFrame:}
+let liveSampEvents = []; //{lenPx:,startFrame:,endFrame
+  const liveSampPortal_gap = 10;
 //###endef Live Sampling Portals VARS
 
 //###ef Live Sampling Portals MAKE
 function makeLiveSampPortals() {
   //Make Enough for events every 1/2 second
-  liveSamp_timesDurs.forEach((lspObj) => {
+  liveSamp_timesDurs.forEach((lspObj, lspIx) => {
     let w = lspObj.dur * PX_PER_SEC;
     let liveSampPortal = mkSvgRect({
       svgContainer: canvas,
       x: 0,
-      y: 8,
+      y: liveSampPortal_gap,
       w: w,
-      h: 20,
+      h: PORTAL_H,
       fill: clr_limeGreen,
       stroke: 'black',
       strokeW: 0,
@@ -265,14 +267,39 @@ function makeLiveSampPortals() {
     });
     liveSampPortal.setAttributeNS(null, 'display', 'none');
     liveSamplingPortals.push(liveSampPortal);
-  });
+    //Portal Number Label
+    liveSampPortalText = mkSvgText({
+      svgContainer: canvas,
+      x: 3,
+      y: liveSampPortal_gap,
+      fill: 'black',
+      stroke: 'black',
+      strokeW: 0,
+      justifyH: 'start',
+      justifyV: 'text-before-edge',
+      // justifyV: 'auto',
+      fontSz: PORTAL_H,
+      fontFamily: 'lato',
+      txt: lspIx.toString()
+    });
+    liveSampPortalText.setAttributeNS(null, 'display', 'none');
+    liveSamplingPortalTexts.push(liveSampPortalText);
+
+    if(lspIx==0){
+      liveSampPortal.setAttributeNS(null, 'display', 'yes');
+      liveSampPortalText.setAttributeNS(null, 'display', 'yes');
+
+    }
+
+  }); //liveSamp_timesDurs.forEach((lspObj) =>
 }
 //###endef Live Sampling Portals MAKE
 
 //###ef Live Sampling Portals WIPE
 function wipeLiveSampPortals() {
-  liveSamplingPortals.forEach((lsp) => {
+  liveSamplingPortals.forEach((lsp, lspIx) => {
     lsp.setAttributeNS(null, 'display', 'none');
+    liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'display', 'none');
   });
 }
 //###endef Live Sampling Portals WIPE
@@ -285,12 +312,14 @@ function updateLiveSamplingPortals() {
     scoreData.liveSamplingPortals[setIx].forEach((lspObj, lspIx) => {
       liveSamplingPortals[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
       liveSamplingPortals[lspIx].setAttributeNS(null, 'display', "yes");
+      liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
+      liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'display', "yes");
       if (lspObj.goStop == 1) {
         //go action here
       } else if (lspObj.goStop == 0) {
         //stop action here
       }
-    });
+    }); //scoreData.liveSamplingPortals[setIx].forEach((lspObj, lspIx) =>
 
   } // if (FRAMECOUNT >= 0)
 
@@ -321,7 +350,6 @@ function updateLiveSamplingPortals() {
 
 
 //##endef Live Sampling Portals
-
 
 //#endef BUILD WORLD
 

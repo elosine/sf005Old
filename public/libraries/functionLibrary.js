@@ -432,6 +432,50 @@ let pad = function(num, size) {
 }
 //#endef pad
 
+// #ef mkSvgText
+// mkSvgText({ svgContainer,  x: 25,  y: 25,  fill: 'black',  stroke: 'white',  strokeW: 0,  justifyH: 'start',  justifyV: 'auto',  fontSz: 18,  fontFamily: 'lato',  txt: '007'});
+let mkSvgText = function({
+  svgContainer,
+  x = 0,
+  y = 0,
+  fill = 'black',
+  stroke = 'white',
+  strokeW = 0,
+  justifyH = 'start',
+  justifyV = 'auto',
+  fontSz = 18,
+  fontFamily = 'lato',
+  txt = '007'
+} = {
+  svgContainer,
+  x: 25,
+  y: 25,
+  fill: 'black',
+  stroke: 'white',
+  strokeW: 0,
+  justifyH: 'start',
+  justifyV: 'auto',
+  fontSz: 18,
+  fontFamily: 'lato',
+  txt: '007'
+}) {
+
+  let svgText = document.createElementNS(SVG_NS, "text");
+  svgText.setAttributeNS(null, "x", x);
+  svgText.setAttributeNS(null, "y", y);
+  svgText.setAttributeNS(null, "fill", fill);
+  svgText.setAttributeNS(null, "stroke", stroke);
+  svgText.setAttributeNS(null, "stroke-width", strokeW);
+  svgText.setAttributeNS(null, "text-anchor", justifyH); //start;middle;end
+  svgText.setAttributeNS(null, "font-size", fontSz);
+  svgText.setAttributeNS(null, "font-family", strokeW);
+  // auto | baseline | before-edge | text-before-edge | middle | central | after-edge | text-after-edge | ideographic | alphabetic | hanging | mathematical | inherit
+  svgText.setAttributeNS(null, "alignment-baseline", justifyV);
+  svgText.textContent = txt;
+  svgContainer.appendChild(svgText);
+  return svgText;
+}
+// #endef END mkSvgText
 
 /*
 
