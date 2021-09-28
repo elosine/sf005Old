@@ -4,14 +4,6 @@
 let scoreData;
 //##endef General Variables
 
-//##ef URL Args
-let PIECE_ID = 'pieceId';
-let partsToRun = [];
-let TOTAL_NUM_PARTS_TO_RUN;
-let SCORE_DATA_FILE_TO_LOAD = "";
-let scoreControlsAreEnabled = true;
-//##endef URL Args
-
 //##ef Timing
 const FRAMERATE = 60;
 let FRAMECOUNT = 0;
@@ -58,8 +50,8 @@ const NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L = Math.round(CURSOR_X / PX_PER_FRAME);
 
 //#ef Animation Engine Variables
 let cumulativeChangeBtwnFrames_MS = 0;
-let epochTimeOfLastFrame_MS;
-let animationEngineCanRun = false;
+let epochTimeOfLastFrame_MS = 0;
+let animationEngineCanRun = true;
 //#endef END Animation Engine Variables
 
 //#ef SOCKET IO
@@ -88,13 +80,12 @@ function init() {
 
   scoreData = generateScoreData();
 
-  scoreCtrlPanel = makeControlPanel();
+  ctrlPanelObj = makeControlPanel();
   makeWorldPanel();
   makeCanvas();
   makeCursor();
   makeLiveSampPortals();
-  makeClock();
-
+  requestAnimationFrame(animationEngine);
 } // function init() END
 //#endef INIT
 
@@ -150,10 +141,11 @@ function generateScoreData() {
   // For each live samp event, calculate which frames it is on scene, and its go frame and stop frame and populate liveSampEvents_byFrame
   liveSamp_timesDurs.forEach((timeDurObj) => { //{goTime:,dur}
     let goFrm = Math.round(timeDurObj.goTime * FRAMERATE);
+    console.log(timeDurObj.goTime + ' ' + goFrm);
     let stopFrm = Math.round(goFrm + (timeDurObj.dur * FRAMERATE));
     let firstFrameOn = goFrm - NUM_FRAMES_WORLD_R_TO_CURSOR;
     let lastFrameOn = stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L
-    for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++) {
+    for (var frmIx = Math.max(firstFrameOn,0); frmIx < lastFrameOn; frmIx++) {
       let tobj = {}; //{x:,goStop:}
       tobj['x'] = WORLD_W - ((frmIx - firstFrameOn) * PX_PER_FRAME);
       if (frmIx == goFrm) tobj['goStop'] = 1;
@@ -165,6 +157,7 @@ function generateScoreData() {
   });
   //RESULT: liveSampEvents_byFrame (DONE)
   scoreDataObject['liveSamplingPortals'] = liveSampEvents_byFrame;
+  console.log(liveSampEvents_byFrame);
   //##endef Live Sampling
 
 
@@ -325,26 +318,12 @@ function updateLiveSamplingPortals() {
 
 //#endef BUILD WORLD
 
-//#ef AUDIO
-
-//##ef Audio Variables
-let audioCtx, DAC;
-let samplePaths = ["/audio/sax.wav"];
-let samples_asBuffers = [];
-let audioHasStarted = false;
-let audioInputSelect;
-let inputStream;
-let audioBuffer = [];
-let audioBufferSize = 0;
-let bufferLength = 1024;
-let isRecording = false;
-let currAudioCaptureObj = {};
-let liveSampBuffers = [];
-//##endef Audio Variables
+//#ef WEB AUDIO
 
 //##ef Initialize Audio
 function initAudio() {
   if (!audioHasStarted) {
+
     audioCtx = new AudioContext({
       latencyHint: 'interactive',
       sampleRate: 44100,
@@ -367,51 +346,67 @@ function initAudio() {
 } // function initAudio()
 //##endef Initialize Audio
 
+//##ef Audio Variables
+let ctrlPanelObj;
+let audioCtx, DAC;
+let samplePaths = ["/audio/sax.wav"];
+let samples_asBuffers = [];
+let audioHasStarted = false;
+
+let audioInputs = [];
+let audioInputSelect;
+let inputStream;
+let audioBuffer = [];
+let audioBufferSize = 0;
+let bufferLength = 1024;
+let isRecording = false;
+let currAudioCaptureObj = {};
+let liveSampBuffers = [];
+//##endef Audio Variables
+
 //##ef startAudioCapture
+
 function startAudioCapture() {
 
-  const audioInputSelect = scoreCtrlPanel.audioInputSelect;
+  const audioInputSelect = ctrlPanelObj.inputSelect;
   const selectors = [audioInputSelect];
 
   navigator.mediaDevices.enumerateDevices()
-    .then(getAudioInputDevices)
-    .then(beginAudioStreamFromInputDevice)
+    .then(gotDevices)
+    .then(start)
     .catch(handleError);
 
-  function getAudioInputDevices(inputDevicesInfo) {
-
+  function gotDevices(deviceInfos) {
     // Handles being called several times to update labels. Preserve values.
     const values = selectors.map(select => select.value);
-
     selectors.forEach(select => {
       while (select.firstChild) {
         select.removeChild(select.firstChild);
       }
-    }); //selectors.forEach(select =>
-
-    for (let i = 0; i !== inputDevicesInfo.length; ++i) {
-      const deviceInfo = inputDevicesInfo[i];
+    });
+    for (let i = 0; i !== deviceInfos.length; ++i) {
+      const deviceInfo = deviceInfos[i];
       const option = document.createElement('option');
       option.value = deviceInfo.deviceId;
       if (deviceInfo.kind === 'audioinput') {
         option.text = deviceInfo.label || `microphone ${audioInputSelect.length + 1}`;
         audioInputSelect.appendChild(option);
       }
-    } //for (let i = 0; i !== inputDevicesInfo.length; ++i)
-
+    }
     selectors.forEach((select, selectorIndex) => {
       if (Array.prototype.slice.call(select.childNodes).some(n => n.value === values[selectorIndex])) {
         select.value = values[selectorIndex];
       }
-    }); // selectors.forEach((select, selectorIndex)
+    });
+  }
 
-  } // function getAudioInputDevices(inputDevicesInfo)
+  audioInputSelect.onchange = start;
 
-  audioInputSelect.onchange = beginAudioStreamFromInputDevice;
-
-  function beginAudioStreamFromInputDevice() {
-
-    if (window.stream) stream.getAudioTracks()[0].stop(); // Second call to getUserMedia() with changed device may cause error, so we need to release stream before changing device
+  function start() {
+    // Second call to getUserMedia() with changed device may cause error, so we need to release stream before changing device
+    if (window.stream) {
+      stream.getAudioTracks()[0].stop();
+    }
 
     const audioSource = audioInputSelect.value;
 
@@ -421,11 +416,10 @@ function startAudioCapture() {
           exact: audioSource
         } : undefined
       }
-    }; //const constraints
+    };
 
     navigator.mediaDevices.getUserMedia(constraints).then(manageStream).catch(handleError);
-
-  } //function beginAudioStreamFromInputDevice()
+  }
 
   function manageStream(stream) {
     window.stream = stream; // make stream available to console
@@ -439,7 +433,7 @@ function startAudioCapture() {
 } // startAudioCapture
 //##endef startAudioCapture
 
-//##ef Live Sampling
+//##ef processAudioInput
 function startAudioInputCapture() {
 
   if (isRecording) return;
@@ -498,7 +492,7 @@ function stopAudioInputCapture() {
 
 } // function stopAudioInputCapture()
 
-function playAudioBuffer(bufNum) {
+function playit(bufNum) {
   let bufferSource = audioCtx.createBufferSource();
   bufferSource.connect(DAC);
   bufferSource.buffer = liveSampBuffers[bufNum];
@@ -506,7 +500,7 @@ function playAudioBuffer(bufNum) {
 }
 
 
-//##endef Live Sampling
+//##endef processAudioInput
 
 //##ef Granular Synthesis
 const playGrain = (grainStartTime_MS, grainDur_MS, bufNum, grEnvName) => {
@@ -558,14 +552,16 @@ function grainCloud001(durSec) {
 }
 //##endef Granular Synthesis
 
-//#endef AUDIO
+
+//#endef WEB AUDIO
 
 //#ef CONTROL PANEL
+
 
 //#ef Control Panel Vars
 let scoreCtrlPanel;
 const CTRLPANEL_W = 300;
-const CTRLPANEL_H = 580;
+const CTRLPANEL_H = 600;
 const CTRLPANEL_MARGIN = 8;
 const CTRLPANEL_MARGINS = CTRLPANEL_MARGIN * 2;
 const BUTTON_MARGIN = 8;
@@ -573,6 +569,7 @@ const BUTTON_MARGINS = BUTTON_MARGIN * 2;
 const CTRLPANEL_BTN_W = CTRLPANEL_W - CTRLPANEL_MARGINS - BUTTON_MARGINS;
 const CTRLPANEL_BTN_H = 40;
 const CTRLPANEL_BTN_L = (CTRLPANEL_W / 2) - (CTRLPANEL_BTN_W / 2) - CTRLPANEL_MARGIN - BUTTON_MARGIN;
+const BUTTON_GAP = CTRLPANEL_MARGIN + CTRLPANEL_BTN_H + BUTTON_MARGINS;
 const CTRLPANEL_SELECT_W = CTRLPANEL_W - CTRLPANEL_MARGINS - BUTTON_MARGINS;
 const CTRLPANEL_SELECT_H = 40;
 const CTRLPANEL_SELECT_ARROW_PAD = 8;
@@ -585,13 +582,13 @@ let gotoBtn_isActive = false;
 let joinBtn_isActive = true;
 let joinGoBtn_isActive = false;
 let restartBtn_isActive = true;
+let makeRestartButton;
 //#endef END Control Panel Vars
 
 //##ef Make Control Panel
 function makeControlPanel() {
 
   let controlPanelObj = {};
-  let BUTTON_GAP = CTRLPANEL_BTN_H + CTRLPANEL_MARGIN + 18;
 
   //###ef Control Panel Panel
   let controlPanelPanel = mkPanel({
@@ -610,12 +607,34 @@ function makeControlPanel() {
   controlPanelObj['panel'] = controlPanelPanel;
   //###endef Control Panel Panel
 
-  //###ef Start Audio Button
+  //###ef Microphone Select
+
+  let inputSelectDiv = mkDiv({
+    canvas: controlPanelPanel,
+    w: CTRLPANEL_SELECT_W,
+    h: CTRLPANEL_SELECT_H,
+    top: 45,
+    left: CTRLPANEL_SELECT_L,
+    bgClr: '#24b662'
+  });
+  inputSelectDiv.className = 'select';
+
+  let inputSelect = document.createElement('select');
+  inputSelect.className = 'select';
+  inputSelect.id = 'audioSource';
+
+  inputSelectDiv.appendChild(inputSelect);
+
+  controlPanelObj['inputSelect'] = inputSelect;
+
+  //###endef Microphone Select
+
+  //###ef Start Piece Button
   let startAudioButton = mkButton({
     canvas: controlPanelPanel.content,
     w: CTRLPANEL_BTN_W,
     h: CTRLPANEL_BTN_H,
-    top: CTRLPANEL_MARGIN,
+    top: CTRLPANEL_MARGIN + BUTTON_GAP,
     left: CTRLPANEL_MARGIN,
     label: 'Start Audio',
     fontSize: 14,
@@ -624,491 +643,92 @@ function makeControlPanel() {
     }
   });
   controlPanelObj['startAudioBtn'] = startAudioButton;
-  //###endef Start Audio Button
+  //###endef Start Piece Button
 
-  //###ef Audio Input Select
-  let inputSelectDiv = mkDiv({
-    canvas: controlPanelPanel,
-    w: CTRLPANEL_SELECT_W,
-    h: CTRLPANEL_SELECT_H,
-    top: CTRLPANEL_MARGIN + BUTTON_GAP + 35,
-    left: CTRLPANEL_SELECT_L,
-    bgClr: '#24b662'
-  });
-  inputSelectDiv.className = 'select';
-
-  let inputSelect = document.createElement('select');
-  inputSelect.className = 'select';
-  inputSelectDiv.appendChild(inputSelect);
-
-  controlPanelObj['audioInputSelect'] = inputSelect;
-  //###endef Audio Input Select
-
-  //###ef Start Piece Button
-  let startButton = mkButton({
+  let playGr = mkButton({
     canvas: controlPanelPanel.content,
     w: CTRLPANEL_BTN_W,
     h: CTRLPANEL_BTN_H,
     top: CTRLPANEL_MARGIN + (BUTTON_GAP * 2),
     left: CTRLPANEL_MARGIN,
-    label: 'Start',
+    label: 'Play Grains',
     fontSize: 14,
     action: function() {
-      markStartTime_startAnimation();
+      // grainCloud001(30);
+      startAudioInputCapture();
+
     }
   });
-  controlPanelObj['startBtn'] = startButton;
-  //###endef Start Piece Button
+  controlPanelObj['playGr'] = playGr;
 
-  //###ef Pause Button
-  let pauseButton = mkButton({
+  let playbuf = mkButton({
     canvas: controlPanelPanel.content,
     w: CTRLPANEL_BTN_W,
     h: CTRLPANEL_BTN_H,
     top: CTRLPANEL_MARGIN + (BUTTON_GAP * 3),
     left: CTRLPANEL_MARGIN,
-    label: 'Pause',
+    label: 'playbuf',
     fontSize: 14,
     action: function() {
-      pauseBtnFunc();
+      stopAudioInputCapture();
     }
   });
-  pauseButton.className = 'btn btn-1_inactive';
-  controlPanelObj['pauseBtn'] = pauseButton;
-  //###endef Pause Button
 
-  //###ef Stop Button
-  let stopButton = mkButton({
+
+
+  let play = mkButton({
     canvas: controlPanelPanel.content,
     w: CTRLPANEL_BTN_W,
     h: CTRLPANEL_BTN_H,
     top: CTRLPANEL_MARGIN + (BUTTON_GAP * 4),
     left: CTRLPANEL_MARGIN,
-    label: 'Stop',
+    label: 'playbuf2',
     fontSize: 14,
     action: function() {
-      stopBtnFunc();
+      playit(0);
     }
   });
-  stopButton.className = 'btn btn-1_inactive';
-  controlPanelObj['stopBtn'] = stopButton;
-  //###endef Stop Button
 
-  //###ef GoTo Input Fields & Button
 
-  //###ef GoTo Button
-  let gotoButton = mkButton({
+
+  let play2 = mkButton({
     canvas: controlPanelPanel.content,
-    w: CTRLPANEL_BTN_W - 94,
+    w: CTRLPANEL_BTN_W,
     h: CTRLPANEL_BTN_H,
     top: CTRLPANEL_MARGIN + (BUTTON_GAP * 5),
     left: CTRLPANEL_MARGIN,
-    label: 'Go To',
+    label: 'playbuf3',
     fontSize: 14,
     action: function() {
-      gotoBtnFunc();
+      playit(1);
     }
   });
-  gotoButton.className = 'btn btn-1_inactive';
-  controlPanelObj['gotoBtn'] = gotoButton;
-  //###endef GoTo Button
 
-  let goToField_w = 18;
-  let goToField_h = 18;
-  let goToField_top = CTRLPANEL_MARGIN + (BUTTON_GAP * 5) + 18;
-  let goToField_left = CTRLPANEL_W - CTRLPANEL_MARGIN - goToField_w - 15;
 
-  //###ef GoTo Input Fields
-  let goTo_secondsInput = mkInputField({
+
+
+  let play3 = mkButton({
     canvas: controlPanelPanel.content,
-    id: 'gotoSecInput',
-    w: goToField_w,
-    h: goToField_h,
-    top: goToField_top,
-    left: goToField_left,
-    fontSize: 15,
-  }); // let goTo_secondsInput = mkInputField
-  goTo_secondsInput.style.textAlign = 'right';
-  goTo_secondsInput.value = 0;
-  controlPanelObj['gotoSecInput'] = goTo_secondsInput;
-  goTo_secondsInput.addEventListener("blur", function(e) { //function for when inputfield loses focus; make sure the number is between 0-59
-    if (goTo_secondsInput.value > 59) goTo_secondsInput.value = 59;
-    if (goTo_secondsInput.value < 0) goTo_secondsInput.value = 0;
-  });
-  goTo_secondsInput.addEventListener("click", function(e) { // selects text when clicked
-    this.select();
-  });
-
-  let goTo_minutesInput = mkInputField({
-    canvas: controlPanelPanel.content,
-    id: 'gotoMinInput',
-    w: goToField_w,
-    h: goToField_h,
-    top: goToField_top,
-    left: goToField_left - goToField_w - 10,
-    fontSize: 15,
-  }); // let goTo_minutesInput = mkInputField
-  goTo_minutesInput.style.textAlign = 'right';
-  goTo_minutesInput.value = 0;
-  controlPanelObj['gotoMinInput'] = goTo_minutesInput;
-  goTo_minutesInput.addEventListener("blur", function(e) { //function for when inputfield loses focus; make sure the number is between 0-59
-    if (goTo_minutesInput.value > 59) goTo_minutesInput.value = 59;
-    if (goTo_minutesInput.value < 0) goTo_minutesInput.value = 0;
-  });
-  goTo_minutesInput.addEventListener("click", function(e) { // selects text when clicked
-    this.select();
-  });
-
-  let goTo_hoursInput = mkInputField({
-    canvas: controlPanelPanel.content,
-    id: 'gotoHrInput',
-    w: goToField_w,
-    h: goToField_h,
-    top: goToField_top,
-    left: goToField_left - goToField_w - 10 - goToField_w - 10,
-    fontSize: 15,
-  }); // let goTo_hoursInput = mkInputField
-  goTo_hoursInput.style.textAlign = 'right';
-  goTo_hoursInput.value = 0;
-  controlPanelObj['gotoHrInput'] = goTo_hoursInput;
-  goTo_hoursInput.addEventListener("blur", function(e) { //function for when inputfield loses focus; make sure the number is between 0-59
-    if (goTo_hoursInput.value < 0) goTo_hoursInput.value = 0;
-  });
-  goTo_hoursInput.addEventListener("click", function(e) { // selects text when clicked
-    this.select();
-  });
-  //###endef GoTo Input Fields
-
-
-
-  //###endef GoTo Input Fields & Button
-
-  //##ef Piece ID Caption
-  let pieceIdDisplayLbl = mkSpan({
-    canvas: controlPanelPanel.content,
+    w: CTRLPANEL_BTN_W,
+    h: CTRLPANEL_BTN_H,
     top: CTRLPANEL_MARGIN + (BUTTON_GAP * 6),
-    left: CTRLPANEL_MARGIN + 11,
-    text: 'Piece ID:',
-    fontSize: 13,
-    color: 'white'
-  });
-  let pieceIdDisplay = mkSpan({
-    canvas: controlPanelPanel.content,
-    top: CTRLPANEL_MARGIN + (BUTTON_GAP * 6) + 20,
-    left: CTRLPANEL_MARGIN + 11,
-    text: PIECE_ID.toString(),
-    fontSize: 13,
-    color: 'white'
-  });
-  //##endef Piece ID Caption
-
-  //###ef Join Button
-  let joinButton = mkButton({
-    canvas: controlPanelPanel.content,
-    w: CTRLPANEL_BTN_W,
-    h: CTRLPANEL_BTN_H,
-    top: CTRLPANEL_H - CTRLPANEL_BTN_H - CTRLPANEL_MARGIN - 22 - BUTTON_GAP,
     left: CTRLPANEL_MARGIN,
-    label: 'Join',
+    label: 'playbuf4',
     fontSize: 14,
     action: function() {
-      joinBtnFunc();
+      playit(2);
     }
   });
-  joinButton.className = 'btn btn-1';
-  controlPanelObj['joinBtn'] = joinButton;
-  //###endef Join Button
 
-  //###ef Join Go Button
-  let joinGoButton = mkButton({
-    canvas: controlPanelPanel.content,
-    w: CTRLPANEL_BTN_W,
-    h: CTRLPANEL_BTN_H,
-    top: CTRLPANEL_H - CTRLPANEL_BTN_H - CTRLPANEL_MARGIN - 22,
-    left: CTRLPANEL_MARGIN,
-    label: 'Go',
-    fontSize: 14,
-    action: function() {
-      joinGoBtnFunc();
-    }
-  });
-  joinGoButton.className = 'btn btn-1_inactive';
-  joinGoButton.className = 'btn btn-1';
-  controlPanelObj['joinGoBtn'] = joinGoButton;
-  //###endef Join Go Button
 
-  if (!scoreControlsAreEnabled) {
-    startBtn_isActive = false;
-    startButton.className = 'btn btn-1_inactive';
-  }
 
   return controlPanelObj;
-
 } // function makeControlPanel() END
 //##endef Make Control Panel
 
-//##ef Start Piece Button Function & Socket
-
-// Broadcast Start Time when Start Button is pressed
-// This function is run from the start button above in Make Control Panel
-let markStartTime_startAnimation = function() {
-  if (startBtn_isActive) {
-
-    let ts_Date = new Date(TS.now());
-    let t_startTime_epoch = ts_Date.getTime(); //send your current time to server to relay as the start time for everyone when received back from server
-
-    // Send start time to server to broadcast to rest of players
-    SOCKET.emit('sf005_newStartTimeBroadcast_toServer', {
-      pieceId: PIECE_ID,
-      startTime_epochTime_MS: t_startTime_epoch,
-      pieceClockAdjustment: pieceClockAdjustment,
-      pauseState: pauseState,
-      timePaused: timePaused
-    });
-
-  } // if (startBtn_isActive)
-} // let markStartTime = function() END
-
-//START PIECE RECEIVE SOCKET FROM SERVER BROADCAST
-// Receive new start time from server broadcast and set startTime_epochTime_MS
-SOCKET.on('sf005_newStartTime_fromServer', function(data) {
-  if (data.pieceId == PIECE_ID) {
-    if (piece_canStart) { //Gate so the start functions aren't activated inadverently
-
-      piece_canStart = false;
-      startBtn_isActive = false;
-      scoreCtrlPanel.startBtn.className = 'btn btn-1_inactive';
-      if (scoreControlsAreEnabled) {
-        stopBtn_isActive = true;
-        scoreCtrlPanel.stopBtn.className = 'btn btn-1';
-        pauseBtn_isActive = true; //activate pause button
-        scoreCtrlPanel.pauseBtn.className = 'btn btn-1'; //activate pause button
-        gotoBtn_isActive = true;
-        scoreCtrlPanel.gotoBtn.className = 'btn btn-1';
-      }
-      joinBtn_isActive = false;
-      scoreCtrlPanel.joinBtn.className = 'btn btn-1_inactive';
-      animationEngineCanRun = true; //unlock animation gate
 
 
-      // scoreCtrlPanel.panel.smallify(); //minimize control panel when start button is pressed
 
-      startTime_epochTime_MS = data.startTime_epochTime_MS; //stamp start time of this piece with timestamp relayed from server
-      epochTimeOfLastFrame_MS = data.startTime_epochTime_MS; //update epochTimeOfLastFrame_MS so animation engine runs properly
-
-      requestAnimationFrame(animationEngine); //kick off animation
-
-    } // if (piece_canStart)
-  } //if (data.pieceId == PIECE_ID)
-}); // SOCKET.on('sf005_newStartTime_fromServer', function(data) END
-//##endef Start Piece function & socket
-
-//##ef Pause Button Function & Socket
-// This function is run from the pause button above in Make Control Panel
-let pauseBtnFunc = function() {
-  if (pauseBtn_isActive) { //gate
-
-    //increment the pause state here locally, but don't update global variable pauseState until received back from server
-    let thisPress_pauseState = (pauseState + 1) % 2; //pause button is a toggle, change state each time it is pressed
-    let tsNow_Date = new Date(TS.now());
-    let timeAtPauseBtnPress_MS = tsNow_Date.getTime(); //timeAtPauseBtnPress_MS
-
-    if (thisPress_pauseState == 1) { //Paused
-      SOCKET.emit('sf005_pause', {
-        pieceId: PIECE_ID,
-        thisPress_pauseState: thisPress_pauseState,
-        timeAtPauseBtnPress_MS: timeAtPauseBtnPress_MS,
-        new_pieceClockAdjustment: pieceClockAdjustment //only used for unpause
-      });
-    } // if (pauseState == 1) { //Paused
-    //
-    else if (thisPress_pauseState == 0) { //unpaused
-
-      let tsNow_Date = new Date(TS.now());
-      let t_currTime_MS = tsNow_Date.getTime();
-      //For here and in goto, you want the pieceClockAdjustment to be the same for all clients
-      //Calculate here before sending to server to broadcast, and when received, set this number to pieceClockAdjustment for everyone
-      let new_pieceClockAdjustment = t_currTime_MS - timePaused + pieceClockAdjustment; //t_currTime_MS - timePaused will be the amount of time to subtract off current time to get back to time when the piece was paused; + pieceClockAdjustment to add to any previous addjustments
-
-      SOCKET.emit('sf005_pause', {
-        pieceId: PIECE_ID,
-        thisPress_pauseState: thisPress_pauseState,
-        timeAtPauseBtnPress_MS: timeAtPauseBtnPress_MS,
-        new_pieceClockAdjustment: new_pieceClockAdjustment
-      });
-    } // else if (pauseState == 0) { //unpaused
-
-  } // if (pauseBtn_isActive)
-} //let pauseBtnFunc = function()
-
-//PAUSE PIECE RECEIVE SOCKET FROM SERVER BROADCAST
-SOCKET.on('sf005_pause_broadcastFromServer', function(data) {
-
-  let requestingId = data.pieceId;
-  let thisPress_pauseState = data.thisPress_pauseState;
-  let timeAtPauseBtnPress_MS = data.timeAtPauseBtnPress_MS;
-  let new_pieceClockAdjustment = data.new_pieceClockAdjustment;
-
-  if (requestingId == PIECE_ID) {
-
-    if (thisPress_pauseState == 1) { //paused
-      timePaused = timeAtPauseBtnPress_MS; //update local global variables //store in server
-      pauseState = thisPress_pauseState; //store in server for join
-      animationEngineCanRun = false;
-      if (scoreControlsAreEnabled) {
-        scoreCtrlPanel.pauseBtn.innerText = 'Resume';
-        scoreCtrlPanel.pauseBtn.className = 'btn btn-2';
-      }
-    } //if (pauseState == 1) { //paused
-    //
-    else if (thisPress_pauseState == 0) { //unpaused
-      pauseState = thisPress_pauseState;
-      pieceClockAdjustment = new_pieceClockAdjustment; //t_currTime_MS - timePaused will be the amount of time to subtract off current time to get back to time when the piece was paused; + pieceClockAdjustment to add to any previous addjustments
-      if (scoreControlsAreEnabled) {
-        scoreCtrlPanel.pauseBtn.innerText = 'Pause';
-        scoreCtrlPanel.pauseBtn.className = 'btn btn-1';
-      }
-      scoreCtrlPanel.panel.smallify();
-      animationEngineCanRun = true;
-      requestAnimationFrame(animationEngine);
-    } //else if (pauseState == 0) { //unpaused
-
-  } //if (requestingId == PIECE_ID)
-
-}); // SOCKET.on('sf005_pauseBroadcast', function(data)
-
-//##endef Pause Button Function & Socket
-
-//##ef Stop Piece Button Function & Socket
-
-let stopBtnFunc = function() {
-  if (stopBtn_isActive) {
-
-    // Send stop command to server to broadcast to rest of players
-    SOCKET.emit('sf005_stop', { //stop also deletes this pieceId's score data on the server
-      pieceId: PIECE_ID,
-    });
-
-  } // if (startBtn_isActive)
-} // stopBtnFunc = function() END
-
-//STOP PIECE RECEIVE SOCKET FROM SERVER BROADCAST
-SOCKET.on('sf005_stop_broadcastFromServer', function(data) {
-  if (data.pieceId == PIECE_ID) {
-    location.reload();
-  } //if (data.pieceId == PIECE_ID)
-}); // SOCKET.on('sf005_stop_broadcastFromServer', function(data) END
-
-//##endef Stop Piece Button Function & Socket
-
-//##ef Goto Button Function & Socket
-
-let gotoBtnFunc = function() {
-  if (gotoBtn_isActive) { //gate
-
-    //Get Goto time and convert to MS
-    let goToTimeMS = (scoreCtrlPanel.gotoHrInput.value * 60 * 60 * 1000) + (scoreCtrlPanel.gotoMinInput.value * 60 * 1000) + (scoreCtrlPanel.gotoSecInput.value * 1000);
-    let tsNow_Date = new Date(TS.now());
-    let t_currTime_MS = tsNow_Date.getTime();
-    let timeAdjustmentToGetToGotoTime = PIECE_TIME_MS - goToTimeMS;
-    //For here and in pause, you want the pieceClockAdjustment to be the same for all clients
-    //Calculate here before sending to server to broadcast, and when received, set this number to pieceClockAdjustment for everyone
-    let newPieceClockAdjustment = pieceClockAdjustment + timeAdjustmentToGetToGotoTime;
-
-    SOCKET.emit('sf005_goto', {
-      pieceId: PIECE_ID,
-      newPieceClockAdjustment: newPieceClockAdjustment
-    });
-
-  } // if (gotoBtn_isActive)
-} // gotoBtnFunc = function()
-
-//PAUSE PIECE RECEIVE SOCKET FROM SERVER BROADCAST
-SOCKET.on('sf005_goto_broadcastFromServer', function(data) {
-
-  let requestingId = data.pieceId;
-  let newPieceClockAdjustment = data.newPieceClockAdjustment;
-
-  if (requestingId == PIECE_ID) {
-    pieceClockAdjustment = newPieceClockAdjustment;
-    scoreCtrlPanel.panel.smallify();
-  } //if (requestingId == PIECE_ID)
-
-}); // SOCKET.on('sf005_goto_broadcastFromServer', function(data)
-
-//##endef Goto Button Function & Socket
-
-//##ef Join Button Function & Socket
-
-let joinBtnFunc = function() {
-  if (joinBtn_isActive) {
-
-    // Send stop command to server to broadcast to rest of players
-    SOCKET.emit('sf005_join', {
-      pieceId: PIECE_ID,
-    });
-
-  } // if (joinBtn_isActive)
-} // joinBtnFunc = function() END
-
-//STOP PIECE RECEIVE SOCKET FROM SERVER BROADCAST
-SOCKET.on('sf005_join_broadcastFromServer', function(data) {
-  if (data.pieceId == PIECE_ID) {
-    if (piece_canStart) { //since this is broadcast all players receive; if your score is started then you won't get this join info
-
-      //Deactivate Start Button
-      piece_canStart = false;
-      startBtn_isActive = false;
-      scoreCtrlPanel.startBtn.className = 'btn btn-1_inactive';
-
-      //Populate the synced data
-      startTime_epochTime_MS = data.startTime_epochTime_MS;
-      pieceClockAdjustment = data.pieceClockAdjustment;
-      pauseState = data.pauseState;
-      timePaused = data.timePaused;
-
-      //Activate Go Button
-      scoreCtrlPanel.joinGoBtn.className = 'btn btn-1';
-      joinGoBtn_isActive = true;
-
-    } //  if (piece_canStart) { //since this is broadcast all players receive; if your score is started then you won't get this join info
-  } //if (data.pieceId == PIECE_ID)
-}); // SOCKET.on('sf005_join_broadcastFromServer', function(data) END
-
-//JOIN GO BUTTON FUNCTION
-let joinGoBtnFunc = function() {
-  if (joinGoBtn_isActive) {
-
-    piece_canStart = false;
-    startBtn_isActive = false;
-    scoreCtrlPanel.startBtn.className = 'btn btn-1_inactive';
-    if (scoreControlsAreEnabled) {
-      stopBtn_isActive = true;
-      scoreCtrlPanel.stopBtn.className = 'btn btn-1';
-      pauseBtn_isActive = true; //activate pause button
-      scoreCtrlPanel.pauseBtn.className = 'btn btn-1'; //activate pause button
-      gotoBtn_isActive = true;
-      scoreCtrlPanel.gotoBtn.className = 'btn btn-1';
-    }
-    joinBtn_isActive = false;
-    joinGoBtn_isActive = false;
-    scoreCtrlPanel.joinBtn.className = 'btn btn-1_inactive';
-
-    scoreCtrlPanel.joinGoBtn.className = 'btn btn-1_inactive';
-
-    animationEngineCanRun = true; //unlock animation gate
-
-
-    scoreCtrlPanel.panel.smallify(); //minimize control panel when start button is pressed
-
-    epochTimeOfLastFrame_MS = startTime_epochTime_MS
-
-    requestAnimationFrame(animationEngine); //kick off animation
-
-  } // if (joinGoBtn_isActive)
-} // joinGoBtnFunc = function() END
-
-//##endef Join Button Function & Socket
 
 //#endef CONTROL PANEL
 
@@ -1137,7 +757,7 @@ function animationEngine(timestamp) { //timestamp not used; timeSync server libr
   } // while (cumulativeChangeBtwnFrames_MS >= MS_PER_FRAME) END
 
   if (animationEngineCanRun) requestAnimationFrame(animationEngine); //animation engine gate: animationEngineCanRun
-
+  // if (FRAMECOUNT < 120) requestAnimationFrame(animationEngine); //animation engine gate: animationEngineCanRun
 } // function animationEngine(timestamp) END
 //##endef Animation Engine END
 
@@ -1146,7 +766,7 @@ function pieceClock(nowEpochTime) {
 
   PIECE_TIME_MS = nowEpochTime - startTime_epochTime_MS - LEAD_IN_TIME_MS - pieceClockAdjustment;
   FRAMECOUNT = Math.round((PIECE_TIME_MS / 1000) * FRAMERATE); //Update FRAMECOUNT based on timeSync Time //if in lead-in FRAMECOUNT will be negative
-  calcDisplayClock(PIECE_TIME_MS);
+  // calcDisplayClock(PIECE_TIME_MS);
 
 }
 //##endef Piece Clock
@@ -1178,28 +798,7 @@ function draw() {
 
 //#endef WIPE/UPDATE/DRAW
 
-//#ef CLOCK
-function makeClock() {
-  displayClock = mkPanel({
-    w: 66,
-    h: 20,
-    title: 'Clock',
-    ipos: 'right-top',
-    clr: 'white',
-    onwindowresize: true
-  })
-  displayClock.content.style.fontSize = "16px";
-  // displayClock.smallify();
-}
 
-function calcDisplayClock(pieceTimeMS) {
-  let displayClock_TimeMS = pieceTimeMS % 1000;
-  let displayClock_TimeSec = Math.floor(pieceTimeMS / 1000) % 60;
-  let displayClock_TimeMin = Math.floor(pieceTimeMS / 60000) % 60;
-  let displayClock_TimeHrs = Math.floor(pieceTimeMS / 3600000);
-  displayClock.content.innerHTML = pad(displayClock_TimeHrs, 2) + ":" + pad(displayClock_TimeMin, 2) + ":" + pad(displayClock_TimeSec, 2);
-}
-//#endef CLOCK
 
 
 
@@ -1219,7 +818,7 @@ let PIECE_ID;
 let partsToRun = [];
 let TOTAL_NUM_PARTS_TO_RUN;
 let SCORE_DATA_FILE_TO_LOAD = "";
-let scoreControlsAreEnabled = true;
+let scoreControlsAreOn = true;
 //##endef URL Args
 
 //##ef Timing
@@ -1744,7 +1343,7 @@ function processUrlArgs() {
 
   TOTAL_NUM_PARTS_TO_RUN = partsToRun.length;
 
-  if (urlArgs.ctls == 'no') scoreControlsAreEnabled = false;
+  if (urlArgs.ctls == 'no') scoreControlsAreOn = false;
 
 } // function processUrlArgs()
 //#endef PROCESS URL ARGS
@@ -4553,7 +4152,7 @@ function makeControlPanel() {
   controlPanelObj['joinGoBtn'] = joinGoButton;
   //###endef Join Go Button
 
-  if (!scoreControlsAreEnabled) {
+  if (!scoreControlsAreOn) {
     startBtn_isActive = false;
     startButton.className = 'btn btn-1_inactive';
   }
@@ -4594,7 +4193,7 @@ SOCKET.on('sf004_newStartTime_fromServer', function(data) {
       piece_canStart = false;
       startBtn_isActive = false;
       scoreCtrlPanel.startBtn.className = 'btn btn-1_inactive';
-      if (scoreControlsAreEnabled) {
+      if (scoreControlsAreOn) {
         stopBtn_isActive = true;
         scoreCtrlPanel.stopBtn.className = 'btn btn-1';
         pauseBtn_isActive = true; //activate pause button
@@ -4671,7 +4270,7 @@ SOCKET.on('sf004_pause_broadcastFromServer', function(data) {
       timePaused = timeAtPauseBtnPress_MS; //update local global variables //store in server
       pauseState = thisPress_pauseState; //store in server for join
       animationEngineCanRun = false;
-      if (scoreControlsAreEnabled) {
+      if (scoreControlsAreOn) {
         scoreCtrlPanel.pauseBtn.innerText = 'Resume';
         scoreCtrlPanel.pauseBtn.className = 'btn btn-2';
       }
@@ -4680,7 +4279,7 @@ SOCKET.on('sf004_pause_broadcastFromServer', function(data) {
     else if (thisPress_pauseState == 0) { //unpaused
       pauseState = thisPress_pauseState;
       pieceClockAdjustment = new_pieceClockAdjustment; //t_currTime_MS - timePaused will be the amount of time to subtract off current time to get back to time when the piece was paused; + pieceClockAdjustment to add to any previous addjustments
-      if (scoreControlsAreEnabled) {
+      if (scoreControlsAreOn) {
         scoreCtrlPanel.pauseBtn.innerText = 'Pause';
         scoreCtrlPanel.pauseBtn.className = 'btn btn-1';
       }
@@ -4798,7 +4397,7 @@ let joinGoBtnFunc = function() {
     piece_canStart = false;
     startBtn_isActive = false;
     scoreCtrlPanel.startBtn.className = 'btn btn-1_inactive';
-    if (scoreControlsAreEnabled) {
+    if (scoreControlsAreOn) {
       stopBtn_isActive = true;
       scoreCtrlPanel.stopBtn.className = 'btn btn-1';
       pauseBtn_isActive = true; //activate pause button
@@ -4833,7 +4432,7 @@ let joinGoBtnFunc = function() {
 SOCKET.on('sf004_restartPrep_broadcastFromServer', function(data) {
   if (data.pieceId == PIECE_ID) {
     //deactivate start button and create restart button
-    if (scoreControlsAreEnabled) {
+    if (scoreControlsAreOn) {
       startBtn_isActive = false;
       scoreCtrlPanel.startBtn.className = 'btn btn-1_inactive';
       makeRestartButton();
@@ -4865,7 +4464,7 @@ SOCKET.on('sf004_restart_broadcastFromServer', function(data) {
     if (piece_canStart) { //Gate so the start functions aren't activated inadverently
 
       piece_canStart = false;
-      if (scoreControlsAreEnabled) {
+      if (scoreControlsAreOn) {
         restartBtn_isActive = false;
         scoreCtrlPanel.restartBtn.className = 'btn btn-1_inactive';
         stopBtn_isActive = true;

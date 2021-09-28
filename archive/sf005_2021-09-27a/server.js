@@ -66,10 +66,10 @@ io.on('connection', function(socket) {
 
     //find out if the pieceId already exists on serverSidePieceData
     let pieceIdIsUnique = true;
-    // serverSidePieceData.forEach((serverSideDataObj) => {
-    //   let tId = serverSideDataObj.pieceId;
-    //   if (tId == pieceId) pieceIdIsUnique = false;
-    // });
+    serverSidePieceData.forEach((serverSideDataObj) => {
+      let tId = serverSideDataObj.pieceId;
+      if (tId == pieceId) pieceIdIsUnique = false;
+    });
 
     if (pieceIdIsUnique) {
 
