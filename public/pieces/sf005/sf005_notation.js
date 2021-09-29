@@ -42,7 +42,7 @@ const WORLD_CENTER = WORLD_W / 2;
 const WORLD_MARGIN = 4;
 const MAX_NUM_PORTALS = Math.round(WORLD_W / PX_PER_HALFSEC); //enough bricks to have 1 every 0.5 seconds for the length of the canvas
 const WORLD_W_FRAMES = WORLD_W / PX_PER_FRAME;
-const PORTAL_H = 30;
+const PORTAL_H = 34;
 //##endef World Panel Variables
 
 //##ef Canvas Variables
@@ -92,8 +92,10 @@ function init() {
   scoreCtrlPanel = makeControlPanel();
   makeWorldPanel();
   makeCanvas();
-  makeCursor();
   makeLiveSampPortals();
+
+  makeCursor();
+
   makeClock();
 
 } // function init() END
@@ -111,41 +113,45 @@ function generateScoreData() {
   let tTimeInc = 0;
   let gapMin = 21;
   let gapMax = 28;
-  for (let i = 0; i < numLiveSamps; i++) {
+  for (let sampIx = 0; sampIx < numLiveSamps; sampIx++) {
     let tObj = {};
     let tGap = rrand(gapMin, gapMax);
     tTimeInc += tGap;
     let tDur = rrand(7, 11);
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
+    tObj['sampNum'] = sampIx;
     liveSamp_timesDurs.push(tObj);
   }
-  // RESULT: liveSamp_timesDurs {goTime:,dur}
+  // RESULT: liveSamp_timesDurs {goTime:,dur, sampNum:}
   //Generate more live sampling events later on in the piece
   tTimeInc = tTimeInc + rrand(240, 420);
-  for (let i = 0; i < numLiveSamps; i++) {
+  for (let sampIx = 0; sampIx < numLiveSamps; sampIx++) {
     let tObj = {};
     let tDur = rrand(7, 11);
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
+    tObj['sampNum'] = sampIx;
     liveSamp_timesDurs.push(tObj);
     let tGap = rrand(gapMin, gapMax);
     tTimeInc += tGap;
   }
   tTimeInc = tTimeInc + rrand(240, 420);
-  for (let i = 0; i < numLiveSamps; i++) {
+  for (let sampIx = 0; sampIx < numLiveSamps; sampIx++) {
     let tObj = {};
     let tDur = rrand(7, 11);
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
+    tObj['sampNum'] = sampIx;
     liveSamp_timesDurs.push(tObj);
     let tGap = rrand(gapMin, gapMax);
     tTimeInc += tGap;
   }
-  // RESULT: liveSamp_timesDurs {goTime:,dur}
+  // RESULT: liveSamp_timesDurs {goTime:,dur, sampNum:}
   // Calculate live sampling loop dur frames & make set of empty arrays
   let timeGapBeforeLooping = rrand(240, 420); //gap before the loop restarts
   let liveSampEvents_byFrame = [];
+  let liveSampEventsLeadIn_byFrame = Array.apply(null, Array(NUM_FRAMES_WORLD_R_TO_CURSOR)).map(function() {});
   let liveSampingLoop_totalNumFrames = Math.ceil((liveSamp_timesDurs[liveSamp_timesDurs.length - 1].goTime + liveSamp_timesDurs[liveSamp_timesDurs.length - 1].dur + timeGapBeforeLooping) * FRAMERATE);
   for (var i = 0; i < liveSampingLoop_totalNumFrames; i++) liveSampEvents_byFrame.push([]);
   // RESULT: liveSampEvents_byFrame
@@ -156,12 +162,17 @@ function generateScoreData() {
     let firstFrameOn = goFrm - NUM_FRAMES_WORLD_R_TO_CURSOR;
     let lastFrameOn = stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L
     for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++) {
-      let tobj = {}; //{x:,goStop:}
+      let tobj = {}; //{x:,goStop:, sampNum:}
+      tobj['sampNum'] = timeDurObj.sampNum;
       tobj['x'] = WORLD_W - ((frmIx - firstFrameOn) * PX_PER_FRAME);
       if (frmIx == goFrm) tobj['goStop'] = 1;
       else if (frmIx == stopFrm) tobj['goStop'] = 0;
       else tobj['goStop'] = -1;
       liveSampEvents_byFrame[frmIx].push(tobj);
+    }
+    //Lead In
+    if(goFrm<=NUM_FRAMES_WORLD_R_TO_CURSOR){
+//START HERE liveSampEventsLeadIn_byFrame
     }
 
   });
@@ -246,7 +257,7 @@ let liveSamplingPortals = [];
 let liveSamplingPortalTexts = [];
 let numLiveSamps = 3;
 let liveSampEvents = []; //{lenPx:,startFrame:,endFrame
-  const liveSampPortal_gap = 10;
+const liveSampPortal_gap = 10;
 //###endef Live Sampling Portals VARS
 
 //###ef Live Sampling Portals MAKE
@@ -276,20 +287,13 @@ function makeLiveSampPortals() {
       stroke: 'black',
       strokeW: 0,
       justifyH: 'start',
-      justifyV: 'text-before-edge',
-      // justifyV: 'auto',
+      justifyV: 'hanging',
       fontSz: PORTAL_H,
       fontFamily: 'lato',
       txt: lspIx.toString()
     });
     liveSampPortalText.setAttributeNS(null, 'display', 'none');
     liveSamplingPortalTexts.push(liveSampPortalText);
-
-    if(lspIx==0){
-      liveSampPortal.setAttributeNS(null, 'display', 'yes');
-      liveSampPortalText.setAttributeNS(null, 'display', 'yes');
-
-    }
 
   }); //liveSamp_timesDurs.forEach((lspObj) =>
 }
@@ -310,14 +314,19 @@ function updateLiveSamplingPortals() {
 
     let setIx = FRAMECOUNT % scoreData.liveSamplingPortals.length;
     scoreData.liveSamplingPortals[setIx].forEach((lspObj, lspIx) => {
+      let sampNum = lspObj.sampNum;
       liveSamplingPortals[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
       liveSamplingPortals[lspIx].setAttributeNS(null, 'display', "yes");
       liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
+      liveSamplingPortalTexts[lspIx].textContent = sampNum;
       liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'display', "yes");
+      // GO ACTION
       if (lspObj.goStop == 1) {
-        //go action here
-      } else if (lspObj.goStop == 0) {
-        //stop action here
+        startAudioInputCapture();
+      }
+      // STOP ACTION
+      else if (lspObj.goStop == 0) {
+        stopAudioInputCapture(sampNum);
       }
     }); //scoreData.liveSamplingPortals[setIx].forEach((lspObj, lspIx) =>
 
@@ -367,7 +376,7 @@ let audioBufferSize = 0;
 let bufferLength = 1024;
 let isRecording = false;
 let currAudioCaptureObj = {};
-let liveSampBuffers = [];
+let liveSampBuffers = Array.apply(null, Array(numLiveSamps)).map(function() {});
 //##endef Audio Variables
 
 //##ef Initialize Audio
@@ -495,7 +504,7 @@ function startAudioInputCapture() {
 
 } // function startAudioInputCapture()
 
-function stopAudioInputCapture() {
+function stopAudioInputCapture(bufNum) {
   if (!isRecording) return;
   isRecording = false;
 
@@ -507,7 +516,7 @@ function stopAudioInputCapture() {
     buffer[i] = mergedBuffer[i];
   }
 
-  liveSampBuffers.push(arrayBuffer);
+  liveSampBuffers[bufNum] = arrayBuffer;
 
   audioBuffer = [];
   audioBufferSize = 0;
