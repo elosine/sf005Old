@@ -112,88 +112,125 @@ function generateScoreData() {
   //##ef Live Sampling
   //Event GoTime & Durations
   let tTimeInc = 0;
-  // let gapMin = 21;
-  // let gapMax = 28;
-  let gapMin = 2;
-  let gapMax = 4;
+  let gapMin = 5;
+  let gapMax = 9;
+  let lsDurMin = 4;
+  let lsDurMax = 6;
+  let gapBtwnSamplingGroupMin = 240;
+  let gapBtwnSamplingGroupMax = 420;
+  let lsPreviousDur = 0;
+  let liveSampPortal_ix = 0
   for (let sampIx = 0; sampIx < numLiveSamps; sampIx++) {
     let tObj = {};
     let tGap = rrand(gapMin, gapMax);
-    tTimeInc += tGap;
-    let tDur = rrand(7, 11);
+    tTimeInc += lsPreviousDur + tGap;
+    let tDur = rrand(lsDurMin, lsDurMax);
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
     tObj['sampNum'] = sampIx;
+    tObj['portalIx'] = liveSampPortal_ix;
+    liveSampPortal_ix++;
+    tLsPortalObj = {};
+    tLsPortalObj['sampNum'] = sampIx;
+    tLsPortalObj['len'] = tDur * PX_PER_SEC;
+    liveSampPortals_data.push(tLsPortalObj);
+    lsPreviousDur = tDur;
     liveSamp_timesDurs.push(tObj);
   }
-  // RESULT: liveSamp_timesDurs {goTime:,dur, sampNum:}
+  // RESULT: liveSamp_timesDurs {goTime:,dur:, sampNum:, portalIx:}
   //Generate more live sampling events later on in the piece
-  tTimeInc = tTimeInc + rrand(240, 420);
+  tTimeInc = tTimeInc + rrand(gapBtwnSamplingGroupMin, gapBtwnSamplingGroupMax);
+  lsPreviousDur = 0;
   for (let sampIx = 0; sampIx < numLiveSamps; sampIx++) {
     let tObj = {};
     let tDur = rrand(7, 11);
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
     tObj['sampNum'] = sampIx;
+    tObj['portalIx'] = liveSampPortal_ix;
+    liveSampPortal_ix++;
+    tLsPortalObj = {};
+    tLsPortalObj['sampNum'] = sampIx;
+    tLsPortalObj['len'] = tDur * PX_PER_SEC;
+    liveSampPortals_data.push(tLsPortalObj);
     liveSamp_timesDurs.push(tObj);
     let tGap = rrand(gapMin, gapMax);
     tTimeInc += tGap;
   }
-  tTimeInc = tTimeInc + rrand(240, 420);
+  tTimeInc = tTimeInc + rrand(gapBtwnSamplingGroupMin, gapBtwnSamplingGroupMax);
+  lsPreviousDur = 0;
   for (let sampIx = 0; sampIx < numLiveSamps; sampIx++) {
     let tObj = {};
-    let tDur = rrand(7, 11);
+    let tDur = rrand(lsDurMin, lsDurMax);
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
     tObj['sampNum'] = sampIx;
+    tObj['portalIx'] = liveSampPortal_ix;
+    liveSampPortal_ix++;
+    tLsPortalObj = {};
+    tLsPortalObj['sampNum'] = sampIx;
+    tLsPortalObj['len'] = tDur * PX_PER_SEC;
+    liveSampPortals_data.push(tLsPortalObj);
     liveSamp_timesDurs.push(tObj);
     let tGap = rrand(gapMin, gapMax);
     tTimeInc += tGap;
   }
-  // RESULT: liveSamp_timesDurs {goTime:,dur, sampNum:}
+  // RESULT: liveSamp_timesDurs {goTime:, dur:, sampNum:, portalIx:}
   // Calculate live sampling loop dur frames & make set of empty arrays
-  let timeGapBeforeLooping = rrand(240, 420); //gap before the loop restarts
+  numLiveSampPortals = liveSampPortal_ix - 1;
+  let timeGapBeforeLooping = rrand(gapBtwnSamplingGroupMin, gapBtwnSamplingGroupMax); //gap before the loop restarts
   let liveSampEvents_byFrame = [];
-  let liveSampEventsLeadIn_byFrame =[];
+  let liveSampEventsLeadIn_byFrame = [];
   for (var i = 0; i < NUM_FRAMES_WORLD_R_TO_CURSOR; i++) liveSampEventsLeadIn_byFrame.push([]);
   let liveSampingLoop_totalNumFrames = Math.ceil((liveSamp_timesDurs[liveSamp_timesDurs.length - 1].goTime + liveSamp_timesDurs[liveSamp_timesDurs.length - 1].dur + timeGapBeforeLooping) * FRAMERATE);
   for (var i = 0; i < liveSampingLoop_totalNumFrames; i++) liveSampEvents_byFrame.push([]);
   // RESULT: liveSampEvents_byFrame
   // For each live samp event, calculate which frames it is on scene, and its go frame and stop frame and populate liveSampEvents_byFrame
-  liveSamp_timesDurs.forEach((timeDurObj) => { //{goTime:,dur}
+  liveSamp_timesDurs.forEach((timeDurObj) => { //{goTime:, dur:, sampNum:, portalIx:}
+
     let goFrm = Math.round(timeDurObj.goTime * FRAMERATE);
     let stopFrm = Math.round(goFrm + (timeDurObj.dur * FRAMERATE));
     let firstFrameOn = goFrm - NUM_FRAMES_WORLD_R_TO_CURSOR;
     let lastFrameOn = stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L
+
     for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++) {
-      let tobj = {}; //{x:,goStop:, sampNum:}
+
+      let tobj = {}; //{x:, goStop:, sampNum:, portalIx: }
       tobj['sampNum'] = timeDurObj.sampNum;
       tobj['x'] = WORLD_W - ((frmIx - firstFrameOn) * PX_PER_FRAME);
+      tobj['portalIx'] = timeDurObj.portalIx;
       if (frmIx == goFrm) tobj['goStop'] = 1;
       else if (frmIx == stopFrm) tobj['goStop'] = 0;
       else tobj['goStop'] = -1;
       liveSampEvents_byFrame[frmIx].push(tobj);
-    }
-    //Lead In
-    if (goFrm <= NUM_FRAMES_WORLD_R_TO_CURSOR) { //if event goFrame > NUM_FRAMES_WORLD_R_TO_CURSOR it will not be on scene until after piece starts at framecount=0
-      //NUM_FRAMES_WORLD_R_TO_CURSOR-goFrm will be the first frame the event is on scene at px worldR
-      let startFrm = NUM_FRAMES_WORLD_R_TO_CURSOR-goFrm; //countdown
-      //we want NUM_FRAMES_WORLD_R_TO_CURSOR to be frame count = 0 ie array will stop 1 frame before 0
-      for (var frmIx = startFrm; frmIx < NUM_FRAMES_WORLD_R_TO_CURSOR; frmIx++) {
-// LOOK AT ARRAY AND MAKE SURE EVERYTHING ADDS UP
-        let tobj = {}; //{x:sampNum:}
-        tobj['sampNum'] = timeDurObj.sampNum;
-        //smallest frame furtherest largest frmIx closest
-        tobj['x'] = NUM_PX_WORLD_R_TO_CURSOR - ((frmIx-startFrm) * PX_PER_FRAME);
-        liveSampEventsLeadIn_byFrame[frmIx].push(tobj);
-      }
-    }
 
-  });
+    } //for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++)
+
+  }); //liveSamp_timesDurs.forEach((timeDurObj) => { //{goTime:,dur}
   //RESULT: liveSampEvents_byFrame (DONE)
+
+  //LEAD-IN
+  let liveSampEventsOnSceneAtStartObj = liveSampEvents_byFrame[0];
+  let liveSamp_numLeadInFrames = NUM_FRAMES_WORLD_R_TO_CURSOR - ((liveSampEventsOnSceneAtStartObj[0].x - CURSOR_X) * PX_PER_FRAME)
+
+  for (var frmIx = 0; frmIx < liveSamp_numLeadInFrames; frmIx++) {
+
+    liveSampEventsOnSceneAtStartObj.forEach((evtObj) => {
+      let tobj = {};
+      let tx = evtObj.x + (PX_PER_FRAME * frmIx);
+      let tsampnum = evtObj.sampNum;
+      tobj['sampNum'] = tsampnum;
+      tobj['x'] = tx;
+      tobj['portalIx'] = evtObj.portalIx;
+      liveSampEventsLeadIn_byFrame[frmIx].push(tobj);
+
+    }); // liveSampEventsOnSceneAtStartObj.forEach((evtObj) =>
+  } // for (var frmIx = 0; frmIx < NUM_FRAMES_WORLD_R_TO_CURSOR; frmIx++)
+  //RESULT: liveSampEventsLeadIn_byFrame
+
   scoreDataObject['liveSamplingPortals'] = liveSampEvents_byFrame;
   scoreDataObject['liveSamplingPortals_leadIn'] = liveSampEventsLeadIn_byFrame;
-  console.log(liveSampEventsLeadIn_byFrame);
+
   //##endef Live Sampling
 
   return scoreDataObject;
@@ -274,20 +311,21 @@ let liveSamplingPortalTexts = [];
 let numLiveSamps = 3;
 let liveSampEvents = []; //{lenPx:,startFrame:,endFrame
 const liveSampPortal_gap = 10;
+let liveSampPortals_data = []; //{sampNum:, len:}
 //###endef Live Sampling Portals VARS
 
 //###ef Live Sampling Portals MAKE
 function makeLiveSampPortals() {
-  //Make Enough for events every 1/2 second
-  liveSamp_timesDurs.forEach((lspObj, lspIx) => {
-    let w = lspObj.dur * PX_PER_SEC;
+  liveSampPortals_data.forEach((lspObj, lspIx) => {
+    let w = lspObj.len;
+    let tSampNumStr = lspObj.sampNum.toString();
     let liveSampPortal = mkSvgRect({
       svgContainer: canvas,
       x: 0,
       y: liveSampPortal_gap,
       w: w,
       h: PORTAL_H,
-      fill: clr_limeGreen,
+      fill: clr_limeGreen, //can change this based on sampNum
       stroke: 'black',
       strokeW: 0,
       roundR: 0
@@ -306,7 +344,7 @@ function makeLiveSampPortals() {
       justifyV: 'hanging',
       fontSz: PORTAL_H,
       fontFamily: 'lato',
-      txt: lspIx.toString()
+      txt: tSampNumStr
     });
     liveSampPortalText.setAttributeNS(null, 'display', 'none');
     liveSamplingPortalTexts.push(liveSampPortalText);
@@ -329,8 +367,9 @@ function updateLiveSamplingPortals() {
   if (FRAMECOUNT >= 0) {
 
     let setIx = FRAMECOUNT % scoreData.liveSamplingPortals.length;
-    scoreData.liveSamplingPortals[setIx].forEach((lspObj, lspIx) => {
+    scoreData.liveSamplingPortals[setIx].forEach((lspObj) => { //{goTime:, dur:, sampNum:, portalIx:}
       let sampNum = lspObj.sampNum;
+      let lspIx = lspObj.portalIx;
       liveSamplingPortals[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
       liveSamplingPortals[lspIx].setAttributeNS(null, 'display', "yes");
       liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
@@ -349,24 +388,23 @@ function updateLiveSamplingPortals() {
   } // if (FRAMECOUNT >= 0)
 
   // LEAD IN
-else if (FRAMECOUNT < 0) {
-    if (-FRAMECOUNT <= scoreData.liveSamplingPortals_leadIn.length) { //FRAMECOUNT is negative; only start lead in set if FRAMECOUNT = the length of lead in tf set for this tempo
-      console.log(FRAMECOUNT);
-      let setIx = scoreData.liveSamplingPortals_leadIn.length + FRAMECOUNT; //count from FRAMECOUNT/thisTempo_tfSet.length and go backwards; ie the first index in set is the furtherest away
+  else if (FRAMECOUNT < 0) {
+    if (-FRAMECOUNT < scoreData.liveSamplingPortals_leadIn.length) { //FRAMECOUNT is negative; only start lead in set if FRAMECOUNT = the length of lead in tf set for this tempo
 
-      scoreData.liveSamplingPortals_leadIn[setIx].forEach((lspObj, lspIx) => { //each tf location for this tempo
+      let setIx = -FRAMECOUNT; //count from FRAMECOUNT/thisTempo_tfSet.length and go backwards; ie the first index in set is the furtherest away
+
+      scoreData.liveSamplingPortals_leadIn[setIx].forEach((lspObj) => { //each tf location for this tempo
         let sampNum = lspObj.sampNum;
+        let lspIx = lspObj.portalIx;
         liveSamplingPortals[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
         liveSamplingPortals[lspIx].setAttributeNS(null, 'display', "yes");
         liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'transform', "translate(" + lspObj.x.toString() + ",0)");
         liveSamplingPortalTexts[lspIx].textContent = sampNum;
         liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'display', "yes");
+      }); // liveSampEventsLeadIn_byFrame[setIx].forEach((lspObj,lspIx) =>
 
-      }); //   liveSampEventsLeadIn_byFrame[setIx].forEach((lspObj,lspIx) =>
-
-    } //      if (-FRAMECOUNT <= liveSampEventsLeadIn_byFrame.length)
-
-  } // if (FRAMECOUNT < 0) END
+    } // if (-FRAMECOUNT <= liveSampEventsLeadIn_byFrame.length)
+  } // else if (FRAMECOUNT < 0)  END
 
 }
 //###endef Live Sampling Portals UPDATE
