@@ -203,6 +203,39 @@ let mkSvgRect = function({
 
 // #endef END mkSvgRect
 
+// #ef mkSvgCircle
+// mkSvgCircle({ svgContainer,  cx: 25,  cy: 25,  r: 10,  fill: 'green',  stroke: 'yellow',  strokeW: 3})
+let mkSvgCircle = function({
+  svgContainer,
+  cx = 25,
+  cy = 25,
+  r = 10,
+  fill = 'green',
+  stroke = 'yellow',
+  strokeW = 3
+} = {
+  svgContainer,
+  cx: 25,
+  cy: 25,
+  r: 10,
+  fill: 'green',
+  stroke: 'yellow',
+  strokeW: 3
+}) {
+
+  var bbCircle = document.createElementNS(SVG_NS, "circle");
+  bbCircle.setAttributeNS(null, "cx", cx);
+  bbCircle.setAttributeNS(null, "cy", cy);
+  bbCircle.setAttributeNS(null, "r", r);
+  bbCircle.setAttributeNS(null, "fill", fill);
+  bbCircle.setAttributeNS(null, "stroke", stroke);
+  bbCircle.setAttributeNS(null, "stroke-width", strokeW);
+  svgContainer.appendChild(bbCircle);
+  return bbCircle;
+}
+
+// #endef END mkSvgCircle
+
 // #ef mkDiv
 //  mkDiv({canvas, w: 50, h: 20, top: 0, left: 0 ,bgClr: clr_limeGreen});
 let mkDiv = function({
@@ -476,6 +509,124 @@ let mkSvgText = function({
   return svgText;
 }
 // #endef END mkSvgText
+
+// #ef rads
+function rads(deg) {
+  return (deg * Math.PI) / 180;
+}
+// #endef END rads
+
+// #ef describeArc
+
+let polarToCartesian = function(centerX, centerY, radius, angleInDegrees) {
+  let angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+  return {
+    x: centerX + (radius * Math.cos(angleInRadians)),
+    y: centerY + (radius * Math.sin(angleInRadians))
+  };
+}
+
+function describeArc(x, y, radius, startAngle, endAngle) {
+  let start = polarToCartesian(x, y, radius, endAngle);
+  let end = polarToCartesian(x, y, radius, startAngle);
+  let arcSweep = endAngle - startAngle <= 180 ? "0" : "1";
+  let d = [
+    "M", start.x, start.y,
+    "A", radius, radius, 0, arcSweep, 0, end.x, end.y,
+    "L", x, y,
+    "L", start.x, start.y
+  ].join(" ");
+  return d;
+}
+
+// #endef END describeArc
+
+// #ef mkSvgArc
+// mkSvgArc({svgContainer,  x: 0,  y: 0,  radius: 10,  startAngle: 45,  endAngle: 180,  fill: 'green',  stroke: 'yellow',  strokeW: 3,  strokeCap: 'round'})
+let mkSvgArc = function({
+  svgContainer,
+  x = 0,
+  y = 0,
+  radius = 10,
+  startAngle = 45,
+  endAngle = 180,
+  fill = 'green',
+  stroke = 'yellow',
+  strokeW = 3,
+  strokeCap = 'round' //square;round;butt
+} = {
+  svgContainer,
+  x: 0,
+  y: 0,
+  radius: 10,
+  startAngle: 45,
+  endAngle: 180,
+  fill: 'green',
+  stroke: 'yellow',
+  strokeW: 3,
+  strokeCap: 'round' //square;round;butt
+}) {
+
+  let start = polarToCartesian(x, y, radius, endAngle);
+  let end = polarToCartesian(x, y, radius, startAngle);
+  let arcSweep = endAngle - startAngle <= 180 ? "0" : "1";
+  let d = [
+    "M", start.x, start.y,
+    "A", radius, radius, 0, arcSweep, 0, end.x, end.y,
+    "L", x, y,
+    "L", start.x, start.y
+  ].join(" ");
+
+  // << << ARCS PROPER -------------------- >
+  let arc = document.createElementNS(SVG_NS, "path");
+  arc.setAttributeNS(null, "d", d); //describeArc makes 12'0clock =0degrees
+  arc.setAttributeNS(null, "stroke-width", strokeW);
+  arc.setAttributeNS(null, "stroke", stroke);
+  arc.setAttributeNS(null, "fill", fill);
+  arc.setAttributeNS(null, "stroke-linecap", strokeCap);
+  svgContainer.appendChild(arc);
+
+  return arc;
+}
+
+// #endef END mkSvgArc
+
+// #ef generatePalindromeTimeContainers
+// generatePalindromeTimeContainers({ numContainersOneWay: 4,startCont_minMax: [90, 110],pctChg_minMax: [-0.25, -0.31] })
+
+let generatePalindromeTimeContainers = function({
+
+  numContainersOneWay = 4,
+  startCont_minMax = [90, 110],
+  pctChg_minMax = [-0.25, -0.31]
+} = {
+  numContainersOneWay: 4,
+  startCont_minMax: [90, 110],
+  pctChg_minMax: [-0.25, -0.31]
+}) {
+
+  let timeContainers = [];
+  let firstTimeContDur = rrand(startCont_minMax[0], startCont_minMax[1]);
+  timeContainers.push(firstTimeContDur);
+
+  for (let contIx = 1; contIx < numContainersOneWay; contIx++) { //make first half of palindrome
+
+    let tPctChg = 1 + rrand(pctChg_minMax[0], pctChg_minMax[1]);
+    let previousTime = timeContainers[contIx - 1];
+    let newTime = previousTime * tPctChg;
+    timeContainers.push(newTime);
+
+  }
+
+  for (let contIx = timeContainers.length - 2; contIx >= 0; contIx--) { //mirror
+    timeContainers.push(timeContainers[contIx]);
+  }
+
+  return timeContainers;
+
+}
+
+// #endef END generatePalindromeTimeContainers
 
 /*
 

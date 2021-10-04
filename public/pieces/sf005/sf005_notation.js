@@ -2,6 +2,7 @@
 
 //##ef General Variables
 let scoreData;
+const colorsInOrder = [clr_brightOrange, clr_brightBlue,clr_mustard,clr_brightGreen, clr_lavander,clr_brightRed, clr_limeGreen, clr_neonMagenta];
 //##endef General Variables
 
 //##ef URL Args
@@ -42,7 +43,6 @@ const WORLD_CENTER = WORLD_W / 2;
 const WORLD_MARGIN = 4;
 const MAX_NUM_PORTALS = Math.round(WORLD_W / PX_PER_HALFSEC); //enough bricks to have 1 every 0.5 seconds for the length of the canvas
 const WORLD_W_FRAMES = WORLD_W / PX_PER_FRAME;
-const PORTAL_H = 34;
 //##endef World Panel Variables
 
 //##ef Canvas Variables
@@ -50,13 +50,29 @@ let canvas;
 //##endef Canvas Variables
 
 //##ef Cursor Variables
-let cursorLine, cursorRect;
+let cursorLine, cursorRectFront, cursorRectBack;
 const CURSOR_RECT_W = 40;
 const CURSOR_X = Math.round(WORLD_W / 4);
 const NUM_PX_WORLD_R_TO_CURSOR = WORLD_W - CURSOR_X;
 const NUM_FRAMES_WORLD_R_TO_CURSOR = Math.round(NUM_PX_WORLD_R_TO_CURSOR / PX_PER_FRAME);
 const NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L = Math.round(CURSOR_X / PX_PER_FRAME);
+const CURSOR_BACK_CENTER_X = CURSOR_X - (CURSOR_RECT_W / 2);
 //##endef Cursor Variables
+
+//##ef Portal Variables
+const PORTAL_H = 36;
+const PORTAL_HALF_H = PORTAL_H/2;
+const PORTAL_MARGIN = 10;
+const PORTAL_GAP = PORTAL_MARGIN + PORTAL_H;
+//##endef Portal Variables
+
+
+//##ef Clock Variables
+const NUM_ARCS_PER_CLOCK = 60;
+const ARC_DEG_INC = 6;
+
+//##endef Clock Variables
+
 
 //#ef Animation Engine Variables
 let cumulativeChangeBtwnFrames_MS = 0;
@@ -96,6 +112,8 @@ function init() {
   makeLiveSampPortals();
 
   makeCursor();
+
+  makeLiveSampPortals_clock();
 
   makeClock();
 
@@ -143,7 +161,7 @@ function generateScoreData() {
   lsPreviousDur = 0;
   for (let sampIx = 0; sampIx < numLiveSamps; sampIx++) {
     let tObj = {};
-    let tDur = rrand(7, 11);
+    let tDur = rrand(lsDurMin, lsDurMax);
     tObj['goTime'] = tTimeInc;
     tObj['dur'] = tDur;
     tObj['sampNum'] = sampIx;
@@ -155,7 +173,7 @@ function generateScoreData() {
     liveSampPortals_data.push(tLsPortalObj);
     liveSamp_timesDurs.push(tObj);
     let tGap = rrand(gapMin, gapMax);
-    tTimeInc += tGap;
+    tTimeInc += tGap + tDur;
   }
   tTimeInc = tTimeInc + rrand(gapBtwnSamplingGroupMin, gapBtwnSamplingGroupMax);
   lsPreviousDur = 0;
@@ -173,7 +191,7 @@ function generateScoreData() {
     liveSampPortals_data.push(tLsPortalObj);
     liveSamp_timesDurs.push(tObj);
     let tGap = rrand(gapMin, gapMax);
-    tTimeInc += tGap;
+    tTimeInc += tGap + tDur;
   }
   // RESULT: liveSamp_timesDurs {goTime:, dur:, sampNum:, portalIx:}
   // Calculate live sampling loop dur frames & make set of empty arrays
@@ -184,6 +202,8 @@ function generateScoreData() {
   for (var i = 0; i < NUM_FRAMES_WORLD_R_TO_CURSOR; i++) liveSampEventsLeadIn_byFrame.push([]);
   let liveSampingLoop_totalNumFrames = Math.ceil((liveSamp_timesDurs[liveSamp_timesDurs.length - 1].goTime + liveSamp_timesDurs[liveSamp_timesDurs.length - 1].dur + timeGapBeforeLooping) * FRAMERATE);
   for (var i = 0; i < liveSampingLoop_totalNumFrames; i++) liveSampEvents_byFrame.push([]);
+  let liveSampEventsClock_byFrame = [];
+  for (var i = 0; i < liveSampingLoop_totalNumFrames; i++) liveSampEventsClock_byFrame.push(-1);
   // RESULT: liveSampEvents_byFrame
   // For each live samp event, calculate which frames it is on scene, and its go frame and stop frame and populate liveSampEvents_byFrame
   liveSamp_timesDurs.forEach((timeDurObj) => { //{goTime:, dur:, sampNum:, portalIx:}
@@ -205,6 +225,17 @@ function generateScoreData() {
       liveSampEvents_byFrame[frmIx].push(tobj);
 
     } //for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++)
+
+    //CLOCK
+    let durFrms = stopFrm - goFrm;
+    let numDegEachFrame = 360 / durFrms;
+    for (var frmIx = goFrm; frmIx < stopFrm; frmIx++) {
+      let degThisFrame = (frmIx - goFrm) * numDegEachFrame;
+      liveSampEventsClock_byFrame[frmIx] = Math.round(degThisFrame); //Update later when you make liveSampArcs
+
+    }
+
+
 
   }); //liveSamp_timesDurs.forEach((timeDurObj) => { //{goTime:,dur}
   //RESULT: liveSampEvents_byFrame (DONE)
@@ -230,8 +261,78 @@ function generateScoreData() {
 
   scoreDataObject['liveSamplingPortals'] = liveSampEvents_byFrame;
   scoreDataObject['liveSamplingPortals_leadIn'] = liveSampEventsLeadIn_byFrame;
-
+  scoreDataObject['liveSampEventsClock_byFrame'] = liveSampEventsClock_byFrame;
   //##endef Live Sampling
+
+  //##ef Grain 01
+  //Time Containers
+  //Num Grain Clouds for the time container
+  //Dur of GrainCloud mostly short
+  //Attack of Cloud
+  //Crescendos and descrendos, backwards sounding, attacked
+
+  const gc1TimeConts1 = generatePalindromeTimeContainers({
+    numContainersOneWay: 4,
+    startCont_minMax: [50, 66],
+    pctChg_minMax: [0.11, 0.17]
+  });
+  const gc1TimeConts2 = generatePalindromeTimeContainers({
+    numContainersOneWay: 4,
+    startCont_minMax: [100, 121],
+    pctChg_minMax: [0.21, 0.27]
+  });
+  const gc1TimeConts = gc1TimeConts1.concat(gc1TimeConts2);
+  const gc1GoTimes = [];
+  let gc1GoTime = 0;
+  for (var timeIx = 0; timeIx < gc1TimeConts.length; timeIx++) {
+    gc1GoTime += gc1TimeConts[timeIx];
+    gc1GoTimes.push(gc1GoTime);
+  }
+  const grCloud01Loop_durFrames = Math.round(gc1GoTimes[gc1GoTimes.length - 1] * FRAMERATE);
+  gc1GoTimes.forEach((goTime, gc1EvtIx) => {
+    let tobj = {};
+    tobj['portalIx'] = gc1EvtIx;
+    let tdur = rrand(3.3, 13);
+    tobj['dur'] = tdur;
+    let tgofrm = Math.round(goTime * FRAMERATE);
+    tobj['goFrm'] = tgofrm;
+    tobj['stopFrm'] = tgofrm + Math.round(tdur * FRAMERATE);
+    gc1EventData.push(tobj);
+  });
+  let grainClouds01_byFrame = []; //{x:, portalIx:, goStop:, clockArcNum:}
+  for (var i = 0; i < grCloud01Loop_durFrames; i++) grainClouds01_byFrame.push({});
+
+  gc1EventData.forEach((evObj, evIx) => { //{goFrm:,stopFrm:, dur:, portalIx: }
+
+    let portalIx = evObj.portalIx;
+    let goFrm = evObj.goFrm;
+    let stopFrm = evObj.stopFrm;
+    let durFrms = stopFrm - goFrm;
+    let firstFrameOn = goFrm - NUM_FRAMES_WORLD_R_TO_CURSOR;
+    let lastFrameOn = stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L
+
+    for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++) {
+
+      grainClouds01_byFrame[frmIx]['portalIx'] = portalIx; //{x:, portalIx:, goStop:, clockArcNum:}
+      grainClouds01_byFrame[frmIx]['x'] = WORLD_W - ((frmIx - firstFrameOn) * PX_PER_FRAME);
+      if (frmIx == goFrm) grainClouds01_byFrame[frmIx]['goStop'] = 1;
+      else if (frmIx == stopFrm) grainClouds01_byFrame[frmIx]['goStop'] = 0;
+      else grainClouds01_byFrame[frmIx]['goStop'] = -1;
+
+    } //for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++)
+
+    //CLOCK
+    let numDegEachFrame = 360 / durFrms;
+    for (var frmIx = goFrm; frmIx < stopFrm; frmIx++) {
+      let degThisFrame = (frmIx - goFrm) * numDegEachFrame;
+      grainClouds01_byFrame[frmIx]['clockArcNum'] = Math.round(degThisFrame); //Update later when you make gc1Arcs
+    }
+
+  }); //  gc1EventData.forEach((evObj, evIx) => { //{goFrm:,stopFrm:, dur:, portalIx: }
+
+  scoreDataObject['grCloud01'] = grainCloud01_byFrame;
+
+  //##endef Grain 01
 
   return scoreDataObject;
 } // function generateScoreData()
@@ -275,13 +376,25 @@ function makeCanvas() {
 //##ef Make Cursor
 function makeCursor() {
 
-  cursorRect = mkSvgRect({
+  cursorRectFront = mkSvgRect({
     svgContainer: canvas,
     x: CURSOR_X,
     y: 1,
     w: CURSOR_RECT_W,
     h: WORLD_H - 2,
     fill: 'none',
+    stroke: 'white',
+    strokeW: 2,
+    roundR: 0
+  });
+
+  cursorRectBack = mkSvgRect({
+    svgContainer: canvas,
+    x: CURSOR_X - CURSOR_RECT_W,
+    y: 1,
+    w: CURSOR_RECT_W,
+    h: WORLD_H - 2,
+    fill: 'black',
     stroke: 'white',
     strokeW: 2,
     roundR: 0
@@ -308,6 +421,8 @@ function makeCursor() {
 let liveSamp_timesDurs = [];
 let liveSamplingPortals = [];
 let liveSamplingPortalTexts = [];
+let liveSampClockCirc;
+let liveSampClockArcs = [];
 let numLiveSamps = 3;
 let liveSampEvents = []; //{lenPx:,startFrame:,endFrame
 const liveSampPortal_gap = 10;
@@ -317,15 +432,18 @@ let liveSampPortals_data = []; //{sampNum:, len:}
 //###ef Live Sampling Portals MAKE
 function makeLiveSampPortals() {
   liveSampPortals_data.forEach((lspObj, lspIx) => {
+
     let w = lspObj.len;
     let tSampNumStr = lspObj.sampNum.toString();
+
+    //Portal & Text
     let liveSampPortal = mkSvgRect({
       svgContainer: canvas,
       x: 0,
       y: liveSampPortal_gap,
       w: w,
       h: PORTAL_H,
-      fill: clr_limeGreen, //can change this based on sampNum
+      fill: colorsInOrder[0],
       stroke: 'black',
       strokeW: 0,
       roundR: 0
@@ -351,6 +469,41 @@ function makeLiveSampPortals() {
 
   }); //liveSamp_timesDurs.forEach((lspObj) =>
 }
+
+function makeLiveSampPortals_clock() {
+
+  liveSampClockCirc = mkSvgCircle({
+    svgContainer: canvas,
+    cx: CURSOR_BACK_CENTER_X,
+    cy: liveSampPortal_gap + (PORTAL_H / 2),
+    r: (CURSOR_RECT_W / 2) - 4,
+    fill: 'none',
+    stroke: clr_limeGreen,
+    strokeW: 2
+  });
+  for (var i = 0; i < NUM_ARCS_PER_CLOCK; i++) {
+    let endAngle = Math.min(ARC_DEG_INC + (ARC_DEG_INC * i), 359.9);
+    let tArc = mkSvgArc({
+      svgContainer: canvas,
+      x: CURSOR_BACK_CENTER_X,
+      y: liveSampPortal_gap + (PORTAL_H / 2),
+      radius: (CURSOR_RECT_W / 2) - 4,
+      startAngle: 0,
+      endAngle: endAngle,
+      fill: clr_limeGreen,
+      stroke: 'none',
+      strokeW: 0,
+      strokeCap: 'round'
+    })
+    tArc.setAttributeNS(null, 'display', 'none');
+    let tobj = {};
+    tobj['arc'] = tArc;
+    tobj['deg'] = endAngle;
+    liveSampClockArcs.push(tobj);
+  }
+
+} // function makeLiveSampPortals_clock()
+
 //###endef Live Sampling Portals MAKE
 
 //###ef Live Sampling Portals WIPE
@@ -358,6 +511,9 @@ function wipeLiveSampPortals() {
   liveSamplingPortals.forEach((lsp, lspIx) => {
     lsp.setAttributeNS(null, 'display', 'none');
     liveSamplingPortalTexts[lspIx].setAttributeNS(null, 'display', 'none');
+  });
+  liveSampClockArcs.forEach((lsa, lsaIx) => {
+    lsa.arc.setAttributeNS(null, 'display', 'none');
   });
 }
 //###endef Live Sampling Portals WIPE
@@ -385,6 +541,12 @@ function updateLiveSamplingPortals() {
       }
     }); //scoreData.liveSamplingPortals[setIx].forEach((lspObj, lspIx) =>
 
+    // CLOCK
+    if (scoreData.liveSampEventsClock_byFrame[setIx] != -1) {
+      let arcThisFrame = Math.floor(scoreData.liveSampEventsClock_byFrame[setIx] / 6);
+      liveSampClockArcs[arcThisFrame].arc.setAttributeNS(null, 'display', "yes");
+    }
+
   } // if (FRAMECOUNT >= 0)
 
   // LEAD IN
@@ -411,6 +573,146 @@ function updateLiveSamplingPortals() {
 
 
 //##endef Live Sampling Portals
+
+//##ef Grain Cloud 01 Portals
+
+
+//###ef Grain Cloud 01 Portals VARS
+let gc1EventData = []; //{goFrm:,stopFrm:, dur:, portalIx: } //populated in generate score
+let gc1Portals = [];
+let gc1ClockCirc;
+let gc1ClockArcs = [];
+let gc1Events = []; //{lenPx:,startFrame:,endFrame}
+const gc1Portal_gap = 10;
+let gc1Portals_data = []; //{sampNum:, len:}
+//###endef Grain Cloud 01 Portals VARS
+
+//###ef Grain Cloud 01 Portals MAKE
+function makeGc1Portals() {
+  gc1EventData.forEach((evObj, evIx) => {
+
+    let w = evObj.dur * PX_PER_SEC;
+
+    let gc1Portal = mkSvgRect({
+      svgContainer: canvas,
+      x: 0,
+      y: PORTAL_MARGIN+PORTAL_GAP,
+      w: w,
+      h: PORTAL_H,
+      fill: colorsInOrder[1],
+      stroke: 'black',
+      strokeW: 0,
+      roundR: 0
+    });
+    gc1Portal.setAttributeNS(null, 'display', 'none');
+    gc1Portals.push(gc1Portal);
+
+      }); //gc1EventData.forEach((evObj) =>
+}
+
+function makeGc1Portals_clock() {
+
+  gc1ClockCirc = mkSvgCircle({
+    svgContainer: canvas,
+    cx: CURSOR_BACK_CENTER_X,
+    cy: PORTAL_MARGIN+PORTAL_GAP+PORTAL_HALF_H,
+    r: (CURSOR_RECT_W / 2) - 4,
+    fill: 'none',
+    stroke: colorsInOrder[1],
+    strokeW: 2
+  });
+  for (var i = 0; i < NUM_ARCS_PER_CLOCK; i++) {
+    let endAngle = Math.min(ARC_DEG_INC + (ARC_DEG_INC * i), 359.9);
+    let tArc = mkSvgArc({
+      svgContainer: canvas,
+      x: CURSOR_BACK_CENTER_X,
+      y: PORTAL_MARGIN+PORTAL_GAP+PORTAL_HALF_H,
+      radius: (CURSOR_RECT_W / 2) - 4,
+      startAngle: 0,
+      endAngle: endAngle,
+      fill: colorsInOrder[1],
+      stroke: 'none',
+      strokeW: 0,
+      strokeCap: 'round'
+    })
+    tArc.setAttributeNS(null, 'display', 'none');
+    let tobj = {};
+    tobj['arc'] = tArc;
+    tobj['deg'] = endAngle;
+    gc1ClockArcs.push(tobj);
+  }
+
+} // function makeGc1Portals_clock()
+
+//###endef Grain Cloud 01 Portals MAKE
+
+//###ef Grain Cloud 01 Portals WIPE
+function wipeGc1Portals() {
+  gc1Portals.forEach((lsp, evIx) => {
+    lsp.setAttributeNS(null, 'display', 'none');
+    gc1PortalTexts[evIx].setAttributeNS(null, 'display', 'none');
+  });
+  gc1ClockArcs.forEach((lsa, lsaIx) => {
+    lsa.arc.setAttributeNS(null, 'display', 'none');
+  });
+}
+//###endef Grain Cloud 01 Portals WIPE
+
+//###ef Grain Cloud 01 Portals UPDATE
+function updateGc1lingPortals() {
+  if (FRAMECOUNT >= 0) {
+
+    let setIx = FRAMECOUNT % scoreData.gc1Portals.length;
+    scoreData.gc1Portals[setIx].forEach((evObj) => { //{goTime:, dur:, sampNum:, portalIx:}
+      let sampNum = evObj.sampNum;
+      let evIx = evObj.portalIx;
+      gc1Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
+      gc1Portals[evIx].setAttributeNS(null, 'display', "yes");
+      gc1PortalTexts[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
+      gc1PortalTexts[evIx].textContent = sampNum;
+      gc1PortalTexts[evIx].setAttributeNS(null, 'display', "yes");
+      // GO ACTION
+      if (evObj.goStop == 1) {
+        startAudioInputCapture();
+      }
+      // STOP ACTION
+      else if (evObj.goStop == 0) {
+        stopAudioInputCapture(sampNum);
+      }
+    }); //scoreData.gc1Portals[setIx].forEach((evObj, evIx) =>
+
+    // CLOCK
+    if (scoreData.gc1EventsClock_byFrame[setIx] != -1) {
+      let arcThisFrame = Math.floor(scoreData.gc1EventsClock_byFrame[setIx] / 6);
+      gc1ClockArcs[arcThisFrame].arc.setAttributeNS(null, 'display', "yes");
+    }
+
+  } // if (FRAMECOUNT >= 0)
+
+  // LEAD IN
+  else if (FRAMECOUNT < 0) {
+    if (-FRAMECOUNT < scoreData.gc1Portals_leadIn.length) { //FRAMECOUNT is negative; only start lead in set if FRAMECOUNT = the length of lead in tf set for this tempo
+
+      let setIx = -FRAMECOUNT; //count from FRAMECOUNT/thisTempo_tfSet.length and go backwards; ie the first index in set is the furtherest away
+
+      scoreData.gc1Portals_leadIn[setIx].forEach((evObj) => { //each tf location for this tempo
+        let sampNum = evObj.sampNum;
+        let evIx = evObj.portalIx;
+        gc1Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
+        gc1Portals[evIx].setAttributeNS(null, 'display', "yes");
+        gc1PortalTexts[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
+        gc1PortalTexts[evIx].textContent = sampNum;
+        gc1PortalTexts[evIx].setAttributeNS(null, 'display', "yes");
+      }); // gc1EventsLeadIn_byFrame[setIx].forEach((evObj,evIx) =>
+
+    } // if (-FRAMECOUNT <= gc1EventsLeadIn_byFrame.length)
+  } // else if (FRAMECOUNT < 0)  END
+
+}
+//###endef Grain Cloud 01 Portals UPDATE
+
+
+//##endef Grain Cloud 01 Portals
 
 //#endef BUILD WORLD
 
