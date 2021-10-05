@@ -2,7 +2,7 @@
 
 //##ef General Variables
 let scoreData;
-const colorsInOrder = [clr_brightOrange, clr_brightBlue,clr_mustard,clr_brightGreen, clr_lavander,clr_brightRed, clr_limeGreen, clr_neonMagenta];
+const colorsInOrder = [clr_brightOrange, clr_brightBlue, clr_mustard, clr_brightGreen, clr_lavander, clr_brightRed, clr_limeGreen, clr_neonMagenta];
 //##endef General Variables
 
 //##ef URL Args
@@ -61,7 +61,7 @@ const CURSOR_BACK_CENTER_X = CURSOR_X - (CURSOR_RECT_W / 2);
 
 //##ef Portal Variables
 const PORTAL_H = 36;
-const PORTAL_HALF_H = PORTAL_H/2;
+const PORTAL_HALF_H = PORTAL_H / 2;
 const PORTAL_MARGIN = 10;
 const PORTAL_GAP = PORTAL_MARGIN + PORTAL_H;
 //##endef Portal Variables
@@ -110,10 +110,12 @@ function init() {
   makeWorldPanel();
   makeCanvas();
   makeLiveSampPortals();
+  makeGc1Portals()
 
   makeCursor();
 
   makeLiveSampPortals_clock();
+  makeGc1Portals_clock();
 
   makeClock();
 
@@ -288,7 +290,6 @@ function generateScoreData() {
     gc1GoTime += gc1TimeConts[timeIx];
     gc1GoTimes.push(gc1GoTime);
   }
-  const grCloud01Loop_durFrames = Math.round(gc1GoTimes[gc1GoTimes.length - 1] * FRAMERATE);
   gc1GoTimes.forEach((goTime, gc1EvtIx) => {
     let tobj = {};
     tobj['portalIx'] = gc1EvtIx;
@@ -299,10 +300,13 @@ function generateScoreData() {
     tobj['stopFrm'] = tgofrm + Math.round(tdur * FRAMERATE);
     gc1EventData.push(tobj);
   });
+  const grCloud01Loop_durFrames = gc1EventData[gc1EventData.length - 1].stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L;
+
   let grainClouds01_byFrame = []; //{x:, portalIx:, goStop:, clockArcNum:}
   for (var i = 0; i < grCloud01Loop_durFrames; i++) grainClouds01_byFrame.push({});
 
-  gc1EventData.forEach((evObj, evIx) => { //{goFrm:,stopFrm:, dur:, portalIx: }
+  for (var evIx = 0; evIx < gc1EventData.length; evIx++) { //{goFrm:,stopFrm:, dur:, portalIx: }
+    let evObj = gc1EventData[evIx];
 
     let portalIx = evObj.portalIx;
     let goFrm = evObj.goFrm;
@@ -310,7 +314,6 @@ function generateScoreData() {
     let durFrms = stopFrm - goFrm;
     let firstFrameOn = goFrm - NUM_FRAMES_WORLD_R_TO_CURSOR;
     let lastFrameOn = stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L
-
     for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++) {
 
       grainClouds01_byFrame[frmIx]['portalIx'] = portalIx; //{x:, portalIx:, goStop:, clockArcNum:}
@@ -324,13 +327,14 @@ function generateScoreData() {
     //CLOCK
     let numDegEachFrame = 360 / durFrms;
     for (var frmIx = goFrm; frmIx < stopFrm; frmIx++) {
-      let degThisFrame = (frmIx - goFrm) * numDegEachFrame;
-      grainClouds01_byFrame[frmIx]['clockArcNum'] = Math.round(degThisFrame); //Update later when you make gc1Arcs
+      let degThisFrame =  (frmIx - goFrm) * numDegEachFrame;
+      let tarcnum = Math.floor(degThisFrame/ARC_DEG_INC);
+      grainClouds01_byFrame[frmIx]['clockArcNum'] =tarcnum; //Update later when you make gc1Arcs
     }
 
-  }); //  gc1EventData.forEach((evObj, evIx) => { //{goFrm:,stopFrm:, dur:, portalIx: }
+  } //  gc1EventData.forEach((evObj, evIx) => { //{goFrm:,stopFrm:, dur:, portalIx: }
 
-  scoreDataObject['grCloud01'] = grainCloud01_byFrame;
+  scoreDataObject['grCloud01'] = grainClouds01_byFrame;
 
   //##endef Grain 01
 
@@ -584,7 +588,6 @@ let gc1ClockCirc;
 let gc1ClockArcs = [];
 let gc1Events = []; //{lenPx:,startFrame:,endFrame}
 const gc1Portal_gap = 10;
-let gc1Portals_data = []; //{sampNum:, len:}
 //###endef Grain Cloud 01 Portals VARS
 
 //###ef Grain Cloud 01 Portals MAKE
@@ -596,7 +599,7 @@ function makeGc1Portals() {
     let gc1Portal = mkSvgRect({
       svgContainer: canvas,
       x: 0,
-      y: PORTAL_MARGIN+PORTAL_GAP,
+      y: PORTAL_MARGIN + PORTAL_GAP,
       w: w,
       h: PORTAL_H,
       fill: colorsInOrder[1],
@@ -607,7 +610,7 @@ function makeGc1Portals() {
     gc1Portal.setAttributeNS(null, 'display', 'none');
     gc1Portals.push(gc1Portal);
 
-      }); //gc1EventData.forEach((evObj) =>
+  }); //gc1EventData.forEach((evObj) =>
 }
 
 function makeGc1Portals_clock() {
@@ -615,7 +618,7 @@ function makeGc1Portals_clock() {
   gc1ClockCirc = mkSvgCircle({
     svgContainer: canvas,
     cx: CURSOR_BACK_CENTER_X,
-    cy: PORTAL_MARGIN+PORTAL_GAP+PORTAL_HALF_H,
+    cy: PORTAL_MARGIN + PORTAL_GAP + PORTAL_HALF_H,
     r: (CURSOR_RECT_W / 2) - 4,
     fill: 'none',
     stroke: colorsInOrder[1],
@@ -626,7 +629,7 @@ function makeGc1Portals_clock() {
     let tArc = mkSvgArc({
       svgContainer: canvas,
       x: CURSOR_BACK_CENTER_X,
-      y: PORTAL_MARGIN+PORTAL_GAP+PORTAL_HALF_H,
+      y: PORTAL_MARGIN + PORTAL_GAP + PORTAL_HALF_H,
       radius: (CURSOR_RECT_W / 2) - 4,
       startAngle: 0,
       endAngle: endAngle,
@@ -642,70 +645,65 @@ function makeGc1Portals_clock() {
     gc1ClockArcs.push(tobj);
   }
 
+  //UPDATE   grainClouds01_byFrame[frmIx]['clockArcNum']
+
+
 } // function makeGc1Portals_clock()
 
 //###endef Grain Cloud 01 Portals MAKE
 
 //###ef Grain Cloud 01 Portals WIPE
 function wipeGc1Portals() {
-  gc1Portals.forEach((lsp, evIx) => {
-    lsp.setAttributeNS(null, 'display', 'none');
-    gc1PortalTexts[evIx].setAttributeNS(null, 'display', 'none');
+  gc1Portals.forEach((portal, evIx) => {
+    portal.setAttributeNS(null, 'display', 'none');
   });
-  gc1ClockArcs.forEach((lsa, lsaIx) => {
-    lsa.arc.setAttributeNS(null, 'display', 'none');
+  gc1ClockArcs.forEach((tarc) => {
+    tarc.arc.setAttributeNS(null, 'display', 'none');
   });
 }
 //###endef Grain Cloud 01 Portals WIPE
 
 //###ef Grain Cloud 01 Portals UPDATE
-function updateGc1lingPortals() {
+function updateGc1Portals() {
   if (FRAMECOUNT >= 0) {
 
-    let setIx = FRAMECOUNT % scoreData.gc1Portals.length;
-    scoreData.gc1Portals[setIx].forEach((evObj) => { //{goTime:, dur:, sampNum:, portalIx:}
-      let sampNum = evObj.sampNum;
+    let setIx = FRAMECOUNT % scoreData.grCloud01.length;
+    if (Object.keys(scoreData.grCloud01[setIx]).length !== 0) {
+      let evObj = scoreData.grCloud01[setIx]; //{x:, portalIx:, goStop:, clockArcNum:}
       let evIx = evObj.portalIx;
       gc1Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
       gc1Portals[evIx].setAttributeNS(null, 'display', "yes");
-      gc1PortalTexts[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
-      gc1PortalTexts[evIx].textContent = sampNum;
-      gc1PortalTexts[evIx].setAttributeNS(null, 'display', "yes");
       // GO ACTION
       if (evObj.goStop == 1) {
-        startAudioInputCapture();
+        // playGrCloud01();
       }
       // STOP ACTION
       else if (evObj.goStop == 0) {
-        stopAudioInputCapture(sampNum);
+        // stopGrCloud01();
       }
-    }); //scoreData.gc1Portals[setIx].forEach((evObj, evIx) =>
+      // CLOCK
+      if ('clockArcNum' in evObj) gc1ClockArcs[evObj.clockArcNum].arc.setAttributeNS(null, 'display', "yes");
 
-    // CLOCK
-    if (scoreData.gc1EventsClock_byFrame[setIx] != -1) {
-      let arcThisFrame = Math.floor(scoreData.gc1EventsClock_byFrame[setIx] / 6);
-      gc1ClockArcs[arcThisFrame].arc.setAttributeNS(null, 'display', "yes");
     }
-
   } // if (FRAMECOUNT >= 0)
 
   // LEAD IN
   else if (FRAMECOUNT < 0) {
-    if (-FRAMECOUNT < scoreData.gc1Portals_leadIn.length) { //FRAMECOUNT is negative; only start lead in set if FRAMECOUNT = the length of lead in tf set for this tempo
-
-      let setIx = -FRAMECOUNT; //count from FRAMECOUNT/thisTempo_tfSet.length and go backwards; ie the first index in set is the furtherest away
-
-      scoreData.gc1Portals_leadIn[setIx].forEach((evObj) => { //each tf location for this tempo
-        let sampNum = evObj.sampNum;
-        let evIx = evObj.portalIx;
-        gc1Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
-        gc1Portals[evIx].setAttributeNS(null, 'display', "yes");
-        gc1PortalTexts[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
-        gc1PortalTexts[evIx].textContent = sampNum;
-        gc1PortalTexts[evIx].setAttributeNS(null, 'display', "yes");
-      }); // gc1EventsLeadIn_byFrame[setIx].forEach((evObj,evIx) =>
-
-    } // if (-FRAMECOUNT <= gc1EventsLeadIn_byFrame.length)
+    // if (-FRAMECOUNT < scoreData.gc1Portals_leadIn.length) { //FRAMECOUNT is negative; only start lead in set if FRAMECOUNT = the length of lead in tf set for this tempo
+    //
+    //   let setIx = -FRAMECOUNT; //count from FRAMECOUNT/thisTempo_tfSet.length and go backwards; ie the first index in set is the furtherest away
+    //
+    //   scoreData.gc1Portals_leadIn[setIx].forEach((evObj) => { //each tf location for this tempo
+    //     let sampNum = evObj.sampNum;
+    //     let evIx = evObj.portalIx;
+    //     gc1Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
+    //     gc1Portals[evIx].setAttributeNS(null, 'display', "yes");
+    //     gc1PortalTexts[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
+    //     gc1PortalTexts[evIx].textContent = sampNum;
+    //     gc1PortalTexts[evIx].setAttributeNS(null, 'display', "yes");
+    //   }); // gc1EventsLeadIn_byFrame[setIx].forEach((evObj,evIx) =>
+    //
+    // } // if (-FRAMECOUNT <= gc1EventsLeadIn_byFrame.length)
   } // else if (FRAMECOUNT < 0)  END
 
 }
@@ -1551,12 +1549,14 @@ function pieceClock(nowEpochTime) {
 //##ef Wipe Function
 function wipe() {
   wipeLiveSampPortals();
+  wipeGc1Portals();
 } // function wipe() END
 //##endef Wipe Function
 
 //##ef Update Function
 function update() {
   updateLiveSamplingPortals();
+  updateGc1Portals();
 }
 //##endef Update Function
 
