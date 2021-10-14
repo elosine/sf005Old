@@ -273,40 +273,51 @@ function generateScoreData() {
   //Attack of Cloud
   //Crescendos and descrendos, backwards sounding, attacked
 
-  const gc1TimeConts1 = generatePalindromeTimeContainers({
+  //Two Sets of palindrome time containers
+  const gc1_timeContainers1 = generatePalindromeTimeContainers({
     numContainersOneWay: 4,
     startCont_minMax: [50, 66],
     pctChg_minMax: [0.11, 0.17]
   });
-  const gc1TimeConts2 = generatePalindromeTimeContainers({
+  const gc1_timeContainers2 = generatePalindromeTimeContainers({
     numContainersOneWay: 4,
     startCont_minMax: [100, 121],
     pctChg_minMax: [0.21, 0.27]
   });
-  const gc1TimeConts = gc1TimeConts1.concat(gc1TimeConts2);
-  const gc1GoTimes = [];
-  let gc1GoTime = 0;
-  for (var timeIx = 0; timeIx < gc1TimeConts.length; timeIx++) {
-    gc1GoTime += gc1TimeConts[timeIx];
-    gc1GoTimes.push(gc1GoTime);
+  const gc1_timeContainers = gc1_timeContainers1.concat(gc1_timeContainers2); //concat both sets
+  // RESULT: gc1_timeContainers
+
+  //Generate gotimes from time containers
+  const gc1_goTimes = [];
+  let gc1_goTime = 0;
+  for (var timeIx = 0; timeIx < gc1_timeContainers.length; timeIx++) {
+    gc1_goTime += gc1_timeContainers[timeIx]; //increment first so no event at 0
+    gc1_goTimes.push(gc1_goTime);
   }
-  gc1GoTimes.forEach((goTime, gc1EvtIx) => {
+  //RESULT: gc1_goTimes
+
+  //Generate Event Data {portalIx:, dur:, goFrm:, stopFrm:}
+  //gc1_eventData var initialization in Grain Cloud 01 Portals VARS
+  gc1_goTimes.forEach((goTime, evtIx) => {
     let tobj = {};
-    tobj['portalIx'] = gc1EvtIx;
+    tobj['portalIx'] = evtIx;
     let tdur = rrand(3.3, 13);
     tobj['dur'] = tdur;
     let tgofrm = Math.round(goTime * FRAMERATE);
     tobj['goFrm'] = tgofrm;
     tobj['stopFrm'] = tgofrm + Math.round(tdur * FRAMERATE);
-    gc1EventData.push(tobj);
+    gc1_eventData.push(tobj);
   });
-  const grCloud01Loop_durFrames = gc1EventData[gc1EventData.length - 1].stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L;
+  //RESULT: gc1_eventData {portalIx:, dur:, goFrm:, stopFrm:}
+
+  //Calculate number of frames in event loop
+  const gc1_eventLoop_durFrames = gc1_eventData[gc1_eventData.length - 1].stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L;
 
   let grainClouds01_byFrame = []; //{x:, portalIx:, goStop:, clockArcNum:}
-  for (var i = 0; i < grCloud01Loop_durFrames; i++) grainClouds01_byFrame.push({});
+  for (var i = 0; i < gc1_eventLoop_durFrames; i++) grainClouds01_byFrame.push({});
 
-  for (var evIx = 0; evIx < gc1EventData.length; evIx++) { //{goFrm:,stopFrm:, dur:, portalIx: }
-    let evObj = gc1EventData[evIx];
+  for (var evIx = 0; evIx < gc1_eventData.length; evIx++) { //{goFrm:,stopFrm:, dur:, portalIx: }
+    let evObj = gc1_eventData[evIx];
 
     let portalIx = evObj.portalIx;
     let goFrm = evObj.goFrm;
@@ -327,12 +338,12 @@ function generateScoreData() {
     //CLOCK
     let numDegEachFrame = 360 / durFrms;
     for (var frmIx = goFrm; frmIx < stopFrm; frmIx++) {
-      let degThisFrame =  (frmIx - goFrm) * numDegEachFrame;
-      let tarcnum = Math.floor(degThisFrame/ARC_DEG_INC);
-      grainClouds01_byFrame[frmIx]['clockArcNum'] =tarcnum; //Update later when you make gc1Arcs
+      let degThisFrame = (frmIx - goFrm) * numDegEachFrame;
+      let tarcnum = Math.floor(degThisFrame / ARC_DEG_INC);
+      grainClouds01_byFrame[frmIx]['clockArcNum'] = tarcnum; //Update later when you make gc1Arcs
     }
 
-  } //  gc1EventData.forEach((evObj, evIx) => { //{goFrm:,stopFrm:, dur:, portalIx: }
+  } //  gc1_eventData.forEach((evObj, evIx) => { //{goFrm:,stopFrm:, dur:, portalIx: }
 
   scoreDataObject['grCloud01'] = grainClouds01_byFrame;
 
@@ -582,7 +593,7 @@ function updateLiveSamplingPortals() {
 
 
 //###ef Grain Cloud 01 Portals VARS
-let gc1EventData = []; //{goFrm:,stopFrm:, dur:, portalIx: } //populated in generate score
+let gc1_eventData = []; //{goFrm:,stopFrm:, dur:, portalIx: } //populated in generate score
 let gc1Portals = [];
 let gc1ClockCirc;
 let gc1ClockArcs = [];
@@ -592,7 +603,7 @@ const gc1Portal_gap = 10;
 
 //###ef Grain Cloud 01 Portals MAKE
 function makeGc1Portals() {
-  gc1EventData.forEach((evObj, evIx) => {
+  gc1_eventData.forEach((evObj, evIx) => {
 
     let w = evObj.dur * PX_PER_SEC;
 
@@ -610,7 +621,7 @@ function makeGc1Portals() {
     gc1Portal.setAttributeNS(null, 'display', 'none');
     gc1Portals.push(gc1Portal);
 
-  }); //gc1EventData.forEach((evObj) =>
+  }); //gc1_eventData.forEach((evObj) =>
 }
 
 function makeGc1Portals_clock() {
