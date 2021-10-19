@@ -110,12 +110,12 @@ function init() {
   makeWorldPanel();
   makeCanvas();
   makeLiveSampPortals();
-  makeGc1Portals()
+  gc1_makePortals()
 
   makeCursor();
 
   makeLiveSampPortals_clock();
-  makeGc1Portals_clock();
+  gc1_makePortals_clock();
 
   makeClock();
 
@@ -312,26 +312,33 @@ function generateScoreData() {
 
   //Calculate number of frames in event loop
   const gc1_eventLoop_durFrames = gc1_eventData[gc1_eventData.length - 1].stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L;
+  //RESULT: gc1_eventLoop_durFrames
 
-  let grainClouds01_byFrame = []; //{x:, portalIx:, goStop:, clockArcNum:}
-  for (var i = 0; i < gc1_eventLoop_durFrames; i++) grainClouds01_byFrame.push({});
+
+  //Populate Frame by frame array
+  let gc1_byFrame = []; //{x:, portalIx:, goStop:, clockArcNum:, durSec:}
+  for (var i = 0; i < gc1_eventLoop_durFrames; i++) gc1_byFrame.push({}); //populate with empty objects
 
   for (var evIx = 0; evIx < gc1_eventData.length; evIx++) { //{goFrm:,stopFrm:, dur:, portalIx: }
+
     let evObj = gc1_eventData[evIx];
 
     let portalIx = evObj.portalIx;
     let goFrm = evObj.goFrm;
     let stopFrm = evObj.stopFrm;
     let durFrms = stopFrm - goFrm;
+    let durSec = evObj.dur;
     let firstFrameOn = goFrm - NUM_FRAMES_WORLD_R_TO_CURSOR;
     let lastFrameOn = stopFrm + NUM_FRAMES_WORLD_CURSOR_TO_WORLD_L
+
     for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++) {
 
-      grainClouds01_byFrame[frmIx]['portalIx'] = portalIx; //{x:, portalIx:, goStop:, clockArcNum:}
-      grainClouds01_byFrame[frmIx]['x'] = WORLD_W - ((frmIx - firstFrameOn) * PX_PER_FRAME);
-      if (frmIx == goFrm) grainClouds01_byFrame[frmIx]['goStop'] = 1;
-      else if (frmIx == stopFrm) grainClouds01_byFrame[frmIx]['goStop'] = 0;
-      else grainClouds01_byFrame[frmIx]['goStop'] = -1;
+      gc1_byFrame[frmIx]['portalIx'] = portalIx; //{x:, portalIx:, goStop:, clockArcNum:, durSec:}
+      gc1_byFrame[frmIx]['durSec'] = durSec;
+      gc1_byFrame[frmIx]['x'] = WORLD_W - ((frmIx - firstFrameOn) * PX_PER_FRAME);
+      if (frmIx == goFrm) gc1_byFrame[frmIx]['goStop'] = 1;
+      else if (frmIx == stopFrm) gc1_byFrame[frmIx]['goStop'] = 0;
+      else gc1_byFrame[frmIx]['goStop'] = -1;
 
     } //for (var frmIx = Math.max(firstFrameOn, 0); frmIx < lastFrameOn; frmIx++)
 
@@ -340,12 +347,33 @@ function generateScoreData() {
     for (var frmIx = goFrm; frmIx < stopFrm; frmIx++) {
       let degThisFrame = (frmIx - goFrm) * numDegEachFrame;
       let tarcnum = Math.floor(degThisFrame / ARC_DEG_INC);
-      grainClouds01_byFrame[frmIx]['clockArcNum'] = tarcnum; //Update later when you make gc1Arcs
+      gc1_byFrame[frmIx]['clockArcNum'] = tarcnum; //Update later when you make gc1Arcs
     }
 
   } //  gc1_eventData.forEach((evObj, evIx) => { //{goFrm:,stopFrm:, dur:, portalIx: }
+  //RESULT: gc1_byFrame
 
-  scoreDataObject['grCloud01'] = grainClouds01_byFrame;
+  //LEAD-IN
+  //Lead in set will be NUM_FRAMES_WORLD_R_TO_CURSOR long
+  let gc1_leadInFrames = [];
+  for (var frmIx = 0; frmIx < NUM_FRAMES_WORLD_R_TO_CURSOR; frmIx++) gc1_leadInFrames.push({});
+  //See if any event go frames are <= NUM_FRAMES_WORLD_R_TO_CURSOR
+  for (var frmIx = 0; frmIx < NUM_FRAMES_WORLD_R_TO_CURSOR; frmIx++) {
+    if (Object.keys(gc1_byFrame[frmIx]).length !== 0) { //not empty object
+
+      let evtObj = gc1_byFrame[frmIx];
+      let tobj = {};
+      let tx = evtObj.x + (PX_PER_FRAME * frmIx);
+      gc1_leadInFrames[frmIx]['x'] = tx;
+      gc1_leadInFrames[frmIx]['portalIx'] = evtObj.portalIx;
+
+    //  START HERE make leadin in uodate
+
+    }
+  } // for (var frmIx = 0; frmIx < NUM_FRAMES_WORLD_R_TO_CURSOR; frmIx++)
+  //RESULT: liveSampEventsLeadIn_byFrame
+
+  scoreDataObject['gc1'] = gc1_byFrame;
 
   //##endef Grain 01
 
@@ -594,20 +622,21 @@ function updateLiveSamplingPortals() {
 
 //###ef Grain Cloud 01 Portals VARS
 let gc1_eventData = []; //{goFrm:,stopFrm:, dur:, portalIx: } //populated in generate score
-let gc1Portals = [];
-let gc1ClockCirc;
-let gc1ClockArcs = [];
+let gc1_Portals = [];
+let gc1_clockCirc;
+let gc1_clockArcs = [];
 let gc1Events = []; //{lenPx:,startFrame:,endFrame}
 const gc1Portal_gap = 10;
 //###endef Grain Cloud 01 Portals VARS
 
 //###ef Grain Cloud 01 Portals MAKE
-function makeGc1Portals() {
+//Using gc1_eventData, generated in generate score data, make portal for each event based on dur, push to
+function gc1_makePortals() {
   gc1_eventData.forEach((evObj, evIx) => {
 
     let w = evObj.dur * PX_PER_SEC;
 
-    let gc1Portal = mkSvgRect({
+    let gc1_Portal = mkSvgRect({
       svgContainer: canvas,
       x: 0,
       y: PORTAL_MARGIN + PORTAL_GAP,
@@ -618,15 +647,17 @@ function makeGc1Portals() {
       strokeW: 0,
       roundR: 0
     });
-    gc1Portal.setAttributeNS(null, 'display', 'none');
-    gc1Portals.push(gc1Portal);
+    gc1_Portal.setAttributeNS(null, 'display', 'none');
+    gc1_Portals.push(gc1_Portal);
 
   }); //gc1_eventData.forEach((evObj) =>
-}
+} //function gc1_makePortals()
+//RESULT: gc1_Portals
 
-function makeGc1Portals_clock() {
+//Make an arc for every ARC_DEG_INC for clock animation
+function gc1_makePortals_clock() {
 
-  gc1ClockCirc = mkSvgCircle({
+  gc1_clockCirc = mkSvgCircle({
     svgContainer: canvas,
     cx: CURSOR_BACK_CENTER_X,
     cy: PORTAL_MARGIN + PORTAL_GAP + PORTAL_HALF_H,
@@ -653,22 +684,19 @@ function makeGc1Portals_clock() {
     let tobj = {};
     tobj['arc'] = tArc;
     tobj['deg'] = endAngle;
-    gc1ClockArcs.push(tobj);
+    gc1_clockArcs.push(tobj);
   }
-
-  //UPDATE   grainClouds01_byFrame[frmIx]['clockArcNum']
-
-
-} // function makeGc1Portals_clock()
-
+  //UPDATE   gc1_byFrame[frmIx]['clockArcNum']
+} // function gc1_makePortals_clock()
+//RESULT: gc1_clockArcs
 //###endef Grain Cloud 01 Portals MAKE
 
 //###ef Grain Cloud 01 Portals WIPE
 function wipeGc1Portals() {
-  gc1Portals.forEach((portal, evIx) => {
+  gc1_Portals.forEach((portal, evIx) => {
     portal.setAttributeNS(null, 'display', 'none');
   });
-  gc1ClockArcs.forEach((tarc) => {
+  gc1_clockArcs.forEach((tarc) => {
     tarc.arc.setAttributeNS(null, 'display', 'none');
   });
 }
@@ -678,22 +706,22 @@ function wipeGc1Portals() {
 function updateGc1Portals() {
   if (FRAMECOUNT >= 0) {
 
-    let setIx = FRAMECOUNT % scoreData.grCloud01.length;
-    if (Object.keys(scoreData.grCloud01[setIx]).length !== 0) {
-      let evObj = scoreData.grCloud01[setIx]; //{x:, portalIx:, goStop:, clockArcNum:}
+    let setIx = FRAMECOUNT % scoreData.gc1.length;
+    if (Object.keys(scoreData.gc1[setIx]).length !== 0) { //not empty object
+      let evObj = scoreData.gc1[setIx]; //{x:, portalIx:, goStop:, clockArcNum:, durSec:}
       let evIx = evObj.portalIx;
-      gc1Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
-      gc1Portals[evIx].setAttributeNS(null, 'display', "yes");
+      gc1_Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
+      gc1_Portals[evIx].setAttributeNS(null, 'display', "yes");
       // GO ACTION
       if (evObj.goStop == 1) {
-        // playGrCloud01();
+        grainCloud001(evObj.durSec);
       }
       // STOP ACTION
       else if (evObj.goStop == 0) {
-        // stopGrCloud01();
+
       }
       // CLOCK
-      if ('clockArcNum' in evObj) gc1ClockArcs[evObj.clockArcNum].arc.setAttributeNS(null, 'display', "yes");
+      if ('clockArcNum' in evObj) gc1_clockArcs[evObj.clockArcNum].arc.setAttributeNS(null, 'display', "yes");
 
     }
   } // if (FRAMECOUNT >= 0)
@@ -707,8 +735,8 @@ function updateGc1Portals() {
     //   scoreData.gc1Portals_leadIn[setIx].forEach((evObj) => { //each tf location for this tempo
     //     let sampNum = evObj.sampNum;
     //     let evIx = evObj.portalIx;
-    //     gc1Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
-    //     gc1Portals[evIx].setAttributeNS(null, 'display', "yes");
+    //     gc1_Portals[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
+    //     gc1_Portals[evIx].setAttributeNS(null, 'display', "yes");
     //     gc1PortalTexts[evIx].setAttributeNS(null, 'transform', "translate(" + evObj.x.toString() + ",0)");
     //     gc1PortalTexts[evIx].textContent = sampNum;
     //     gc1PortalTexts[evIx].setAttributeNS(null, 'display', "yes");
